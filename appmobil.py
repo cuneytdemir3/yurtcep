@@ -23,6 +23,7 @@ SHEET_LINKI = "https://docs.google.com/spreadsheets/d/14vue2y63WXYE6-uXqtiEUgGU-
 # --- MOBİL CSS ---
 st.markdown("""
 <style>
+    /* Genel Buton Stili */
     div[data-testid="stButton"] button {
         width: 100%;
         border-radius: 12px;
@@ -36,6 +37,7 @@ st.markdown("""
         background-color: #f0f2f6;
         border-color: #333;
     }
+    /* WhatsApp Butonu */
     a[kind="primary"] {
         width: 100%;
         border-radius: 12px;
@@ -48,12 +50,21 @@ st.markdown("""
         color: white !important;
         border: none;
     }
+    /* Expander Başlıkları */
     .streamlit-expanderHeader {
         font-size: 18px !important;
         font-weight: bold !important;
         background-color: #f1f3f4;
         border-radius: 10px;
         margin-bottom: 5px;
+    }
+    /* Radio Button (Seçim) Stili */
+    div[role="radiogroup"] {
+        background-color: #fff;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #eee;
+        justify-content: center;
     }
     .stSuccess, .stInfo, .stWarning, .stError {
         padding: 10px;
@@ -133,8 +144,7 @@ def wp(tel, m):
     if not t: return None
     return f"https://wa.me/90{t}?text={urllib.parse.quote(m)}"
 
-# İşlemler
-def drm(i): st.session_state.df.at[i,"Durum"]={"Yurtta":"İzinli","İzinli":"Evde","Evde":"Yurtta"}.get(st.session_state.df.at[i,"Durum"],"Yurtta"); st.session_state.df.at[i,"Mesaj Durumu"]="-"
+# İşlemler (drm fonksiyonu kaldırıldı, yerine direkt seçim geldi)
 def izn(i): st.session_state.df.at[i,"İzin Durumu"]="İzin Yok" if st.session_state.df.at[i,"İzin Durumu"]=="İzin Var" else "İzin Var"
 def ey(i,t): st.session_state.df.at[i,t]={"⚪":"✅ Var","✅ Var":"❌ Yok","❌ Yok":"⚪"}.get(st.session_state.df.at[i,t],"⚪")
 def msj(i,m): st.session_state.df.at[i,"Mesaj Durumu"]=m
@@ -164,19 +174,42 @@ if menu == "📋 LİSTE":
         r = f_df.loc[i]
         ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵"}.get(r['Durum'], "⚪")
         
+        # Kart Yapısı
         with st.expander(f"{ikon} {r['Oda No']} - {r['Ad Soyad']}"):
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button(f"Durum: {r['Durum']}", key=f"d{i}", use_container_width=True): drm(i); st.rerun()
-            with col2:
-                if r['Durum'] != "Yurtta":
-                    btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
-                    # DÜZELTİLEN SATIR BURASI: "else" EKLENDİ
-                    lbl = "✅ İzinli" if r['İzin Durumu']=="İzin Var" else "⛔ İzinsiz"
-                    if st.button(lbl, key=f"i{i}", type=btn, use_container_width=True): izn(i); st.rerun()
+            
+            # --- 1. YENİ DURUM SEÇİCİ (RADYO BUTON) ---
+            st.caption("Öğrenci Durumu Seçiniz:")
+            secenekler = ["Yurtta", "İzinli", "Evde"]
+            
+            # Mevcut durumu bul, listede yoksa başa dön
+            try: mevcut_index = secenekler.index(r['Durum'])
+            except: mevcut_index = 0
+            
+            # Seçim Kutusu
+            yeni_durum = st.radio(
+                "Durum", 
+                secenekler, 
+                index=mevcut_index, 
+                key=f"radio_{i}", 
+                horizontal=True, # Yan yana dizilmesi için
+                label_visibility="collapsed"
+            )
+            
+            # Eğer seçim değiştiyse güncelle ve sayfayı yenile
+            if yeni_durum != r['Durum']:
+                st.session_state.df.at[i, "Durum"] = yeni_durum
+                st.session_state.df.at[i, "Mesaj Durumu"] = "-" # Durum değişince mesajı sıfırla
+                st.rerun()
+
+            # --- 2. İZİN VE DİĞERLERİ ---
+            if r['Durum'] != "Yurtta":
+                st.write("") # Boşluk
+                btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
+                lbl = "✅ İzinli (Resmi)" if r['İzin Durumu']=="İzin Var" else "⛔ İzinsiz (Resmi Değil)"
+                if st.button(lbl, key=f"i{i}", type=btn, use_container_width=True): izn(i); st.rerun()
             
             if r['Durum'] != "Yurtta" and (r['Durum']=="İzinli" or r['İzin Durumu']=="İzin Var"):
-                st.caption("İzinli olduğu için yoklama gerekmez.")
+                st.success("✅ Öğrenci izinli.")
             else:
                 st.divider()
                 c3, c4 = st.columns(2)
@@ -215,3 +248,4 @@ elif menu == "🗄️ GEÇMİŞ":
 elif menu == "📄 PDF":
     u = st.text_input("Belletmen Adı")
     if u: st.download_button("PDF İndir", pdf_yap(st.session_state.df, u), "yoklama.pdf", "application/pdf", type="primary", use_container_width=True)
+
