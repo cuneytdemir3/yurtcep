@@ -43,7 +43,6 @@ st.markdown("""
         background-color: #f0f2f6;
         border-color: #333;
     }
-    /* WhatsApp Butonları */
     a[kind="primary"] {
         width: 100%;
         border-radius: 12px;
@@ -114,7 +113,6 @@ def get_log():
     try: return s.worksheet("GECMIS")
     except: 
         ws = s.add_worksheet("GECMIS", 1000, 12)
-        # Yeni sütunlar eklendi
         ws.append_row(["Tarih", "Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Yat", "Mesaj Durumu", "Baba Adı", "Anne Adı", "Baba Tel", "Anne Tel"])
         return ws
 
@@ -125,8 +123,6 @@ if "df" not in st.session_state:
     try:
         d = get_sheet().get_all_records()
         st.session_state.df = pd.DataFrame(d) if d else pd.DataFrame(columns=SUTUNLAR)
-        
-        # Eksik sütunları tamamla
         for c in SUTUNLAR:
             if c not in st.session_state.df.columns: st.session_state.df[c] = "-"
         st.session_state.df = st.session_state.df.fillna("-")
@@ -156,6 +152,14 @@ def wp(tel, m):
     t = str(tel).replace(' ','').lstrip('0').replace('-','').replace('.','').strip()
     if not t or len(t) < 10: return None
     return f"https://wa.me/90{t}?text={urllib.parse.quote(m)}"
+
+def sablon_indir():
+    # Boş bir şablon oluştur
+    df_sablon = pd.DataFrame(columns=["Ad Soyad", "Numara", "Oda No", "Baba Adı", "Anne Adı", "Baba Tel", "Anne Tel"])
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_sablon.to_excel(writer, index=False)
+    return output.getvalue()
 
 # İşlemler
 def izn(i): st.session_state.df.at[i,"İzin Durumu"]="İzin Yok" if st.session_state.df.at[i,"İzin Durumu"]=="İzin Var" else "İzin Var"
@@ -226,7 +230,6 @@ if menu == "📋 LİSTE":
                         st.warning(f"Durum: {r['Mesaj Durumu']}")
                         msj_txt = f"{r['Ad Soyad']} yoklamada yoktur."
                         
-                        # --- YENİ WHATSAPP SİSTEMİ (ANNE & BABA) ---
                         link_baba = wp(r['Baba Tel'], msj_txt)
                         link_anne = wp(r['Anne Tel'], msj_txt)
                         
@@ -238,27 +241,74 @@ if menu == "📋 LİSTE":
                         if st.button("✅ Mesaj Attım", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
 
 elif menu == "➕ EKLE":
-    st.subheader("Yeni Öğrenci Kartı")
-    with st.form("ekle"):
-        ad=st.text_input("Öğrenci Adı Soyadı")
-        c1, c2 = st.columns(2)
-        no=c1.text_input("Okul No"); oda=c2.text_input("Oda No")
+    st.subheader("Öğrenci Kayıt")
+    
+    # İKİ SEKME: MANUEL ve EXCEL
+    tab1, tab2 = st.tabs(["✍️ Tek Tek Ekle", "📂 Excel Yükle"])
+    
+    with tab1:
+        with st.form("ekle_manuel"):
+            ad=st.text_input("Öğrenci Adı Soyadı")
+            c1, c2 = st.columns(2)
+            no=c1.text_input("Okul No"); oda=c2.text_input("Oda No")
+            st.divider(); st.caption("Aile Bilgileri")
+            b_ad = st.text_input("Baba Adı"); b_tel = st.text_input("Baba Tel (5xx...)")
+            a_ad = st.text_input("Anne Adı"); a_tel = st.text_input("Anne Tel (5xx...)")
+            
+            if st.form_submit_button("Kaydet", type="primary"):
+                y = pd.DataFrame([{
+                    "Ad Soyad":ad, "Numara":no, "Oda No":oda, "Durum":"Yurtta", "İzin Durumu":"İzin Var", 
+                    "Etüd":"⚪", "Yat":"⚪", "Mesaj Durumu":"-", 
+                    "Baba Adı":b_ad, "Anne Adı":a_ad, "Baba Tel":b_tel, "Anne Tel":a_tel
+                }])
+                st.session_state.df = pd.concat([st.session_state.df, y], ignore_index=True)
+                kaydet(); st.success("Eklendi")
+
+    with tab2:
+        st.info("💡 Excel dosyanızda şu başlıklar olmalı: 'Ad Soyad', 'Numara', 'Oda No', 'Baba Adı', 'Anne Adı', 'Baba Tel', 'Anne Tel'")
         
-        st.divider()
-        st.caption("Aile Bilgileri")
-        b_ad = st.text_input("Baba Adı")
-        b_tel = st.text_input("Baba Tel (5xx...)")
-        a_ad = st.text_input("Anne Adı")
-        a_tel = st.text_input("Anne Tel (5xx...)")
+        # Şablon İndirme Butonu
+        st.download_button("📥 Örnek Excel Şablonunu İndir", sablon_indir(), "ogrenci_sablon.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         
-        if st.form_submit_button("Öğrenciyi Kaydet", type="primary"):
-            y = pd.DataFrame([{
-                "Ad Soyad":ad, "Numara":no, "Oda No":oda, "Durum":"Yurtta", "İzin Durumu":"İzin Var", 
-                "Etüd":"⚪", "Yat":"⚪", "Mesaj Durumu":"-", 
-                "Baba Adı":b_ad, "Anne Adı":a_ad, "Baba Tel":b_tel, "Anne Tel":a_tel
-            }])
-            st.session_state.df = pd.concat([st.session_state.df, y], ignore_index=True)
-            kaydet(); st.success("Eklendi")
+        uploaded_file = st.file_uploader("Excel Dosyası Seç", type=["xlsx"])
+        
+        if uploaded_file is not None:
+            try:
+                # Excel'i Oku
+                df_yeni = pd.read_excel(uploaded_file)
+                
+                # Sütunları string yap ki telefon nolar bozulmasın
+                df_yeni = df_yeni.astype(str)
+                
+                # Gerekli sütunları kontrol et
+                eksik_sutunlar = [c for c in ["Ad Soyad", "Numara", "Oda No"] if c not in df_yeni.columns]
+                
+                if eksik_sutunlar:
+                    st.error(f"Hata: Excel dosyasında şu sütunlar eksik: {eksik_sutunlar}")
+                else:
+                    # Eksik diğer sütunları tamamla
+                    for c in SUTUNLAR:
+                        if c not in df_yeni.columns: df_yeni[c] = "-"
+                        
+                    # Varsayılan değerleri ata
+                    df_yeni["Durum"] = "Yurtta"
+                    df_yeni["İzin Durumu"] = "İzin Var"
+                    df_yeni["Etüd"] = "⚪"
+                    df_yeni["Yat"] = "⚪"
+                    df_yeni["Mesaj Durumu"] = "-"
+                    
+                    # 'nan' yazılarını temizle
+                    df_yeni = df_yeni.replace("nan", "-")
+
+                    st.dataframe(df_yeni.head())
+                    if st.button("✅ Bu Listeyi Kaydet", type="primary"):
+                        st.session_state.df = pd.concat([st.session_state.df, df_yeni], ignore_index=True)
+                        kaydet()
+                        st.success(f"{len(df_yeni)} Öğrenci Başarıyla Eklendi!")
+                        time.sleep(2)
+                        st.rerun()
+            except Exception as e:
+                st.error(f"Excel Okuma Hatası: {e}")
 
 elif menu == "🗄️ GEÇMİŞ":
     try: d=pd.DataFrame(get_log().get_all_records()); st.dataframe(d[d["Tarih"]==st.selectbox("Tarih", d["Tarih"].unique())], use_container_width=True)
@@ -267,6 +317,7 @@ elif menu == "🗄️ GEÇMİŞ":
 elif menu == "📄 PDF":
     u = st.text_input("Belletmen Adı")
     if u: st.download_button("PDF İndir", pdf_yap(st.session_state.df, u), "yoklama.pdf", "application/pdf", type="primary", use_container_width=True)
+
 
 
 
