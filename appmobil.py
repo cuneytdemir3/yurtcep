@@ -20,10 +20,16 @@ st.set_page_config(page_title="Yurt Mobil", page_icon="📱", layout="centered")
 # --- LİNK AYARI ---
 SHEET_LINKI = "https://docs.google.com/spreadsheets/d/14vue2y63WXYE6-uXqtiEUgGU-yVrBCJy6R6Nj_EdyMI/edit?gid=0#gid=0"
 
+# --- RENK PALETİ (Her oda için farklı pastel renkler) ---
+RENKLER = [
+    "#FFEBEE", "#E3F2FD", "#E8F5E9", "#FFF3E0", "#F3E5F5", 
+    "#E0F7FA", "#FFFDE7", "#FBE9E7", "#ECEFF1", "#FCE4EC",
+    "#D1C4E9", "#C5CAE9", "#BBDEFB", "#B2DFDB", "#C8E6C9"
+]
+
 # --- MOBİL CSS ---
 st.markdown("""
 <style>
-    /* Genel Buton Stili */
     div[data-testid="stButton"] button {
         width: 100%;
         border-radius: 12px;
@@ -37,7 +43,6 @@ st.markdown("""
         background-color: #f0f2f6;
         border-color: #333;
     }
-    /* WhatsApp Butonu */
     a[kind="primary"] {
         width: 100%;
         border-radius: 12px;
@@ -50,20 +55,18 @@ st.markdown("""
         color: white !important;
         border: none;
     }
-    /* Expander Başlıkları */
     .streamlit-expanderHeader {
-        font-size: 18px !important;
-        font-weight: bold !important;
-        background-color: #f1f3f4;
-        border-radius: 10px;
+        font-size: 17px !important;
+        font-weight: 600 !important;
+        background-color: #ffffff;
+        border: 1px solid #eee;
+        border-radius: 8px;
         margin-bottom: 5px;
     }
-    /* Radio Button (Seçim) Stili */
     div[role="radiogroup"] {
-        background-color: #fff;
+        background-color: #f9f9f9;
         padding: 10px;
         border-radius: 10px;
-        border: 1px solid #eee;
         justify-content: center;
     }
     .stSuccess, .stInfo, .stWarning, .stError {
@@ -144,7 +147,7 @@ def wp(tel, m):
     if not t: return None
     return f"https://wa.me/90{t}?text={urllib.parse.quote(m)}"
 
-# İşlemler (drm fonksiyonu kaldırıldı, yerine direkt seçim geldi)
+# İşlemler
 def izn(i): st.session_state.df.at[i,"İzin Durumu"]="İzin Yok" if st.session_state.df.at[i,"İzin Durumu"]=="İzin Var" else "İzin Var"
 def ey(i,t): st.session_state.df.at[i,t]={"⚪":"✅ Var","✅ Var":"❌ Yok","❌ Yok":"⚪"}.get(st.session_state.df.at[i,t],"⚪")
 def msj(i,m): st.session_state.df.at[i,"Mesaj Durumu"]=m
@@ -168,70 +171,73 @@ if menu == "📋 LİSTE":
     f_df = st.session_state.df
     if ara: f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(ara, case=False)).any(axis=1)]
 
-    st.info(f"Toplam: {len(f_df)} Öğrenci")
+    # --- ODA ODA GRUPLAMA MANTIĞI ---
+    
+    # 1. Mevcut odaların listesini al ve sırala
+    oda_listesi = sorted(f_df["Oda No"].unique().tolist(), key=str)
 
-    for i in f_df.sort_values("Oda No").index:
-        r = f_df.loc[i]
-        ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵"}.get(r['Durum'], "⚪")
+    st.info(f"Toplam: {len(f_df)} Öğrenci / {len(oda_listesi)} Oda")
+    
+    # 2. Her oda için döngü başlat
+    for oda in oda_listesi:
+        # Odaya özel renk belirle (Hash mantığıyla hep aynı odaya aynı renk gelir)
+        oda_renk = RENKLER[hash(str(oda)) % len(RENKLER)]
         
-        # Kart Yapısı
-        with st.expander(f"{ikon} {r['Oda No']} - {r['Ad Soyad']}"):
+        # ODA BAŞLIĞI (BÖLÜM GİBİ GÖRÜNMESİ İÇİN)
+        st.markdown(f"""
+        <div style="background-color: {oda_renk}; padding: 10px; border-radius: 10px; margin-top: 20px; margin-bottom: 10px; border-left: 5px solid #888; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
+            <h3 style="margin:0; color: #333; font-size: 18px;">🛏️ ODA {oda}</h3>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Bu odadaki öğrencileri filtrele
+        oda_ogrencileri = f_df[f_df["Oda No"] == oda]
+        
+        # Öğrencileri listele
+        for i in oda_ogrencileri.index:
+            r = f_df.loc[i]
+            ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵"}.get(r['Durum'], "⚪")
             
-            # --- 1. YENİ DURUM SEÇİCİ (RADYO BUTON) ---
-            st.caption("Öğrenci Durumu Seçiniz:")
-            secenekler = ["Yurtta", "İzinli", "Evde"]
-            
-            # Mevcut durumu bul, listede yoksa başa dön
-            try: mevcut_index = secenekler.index(r['Durum'])
-            except: mevcut_index = 0
-            
-            # Seçim Kutusu
-            yeni_durum = st.radio(
-                "Durum", 
-                secenekler, 
-                index=mevcut_index, 
-                key=f"radio_{i}", 
-                horizontal=True, # Yan yana dizilmesi için
-                label_visibility="collapsed"
-            )
-            
-            # Eğer seçim değiştiyse güncelle ve sayfayı yenile
-            if yeni_durum != r['Durum']:
-                st.session_state.df.at[i, "Durum"] = yeni_durum
-                st.session_state.df.at[i, "Mesaj Durumu"] = "-" # Durum değişince mesajı sıfırla
-                st.rerun()
-
-            # --- 2. İZİN VE DİĞERLERİ ---
-            if r['Durum'] != "Yurtta":
-                st.write("") # Boşluk
-                btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
-                lbl = "✅ İzinli (Resmi)" if r['İzin Durumu']=="İzin Var" else "⛔ İzinsiz (Resmi Değil)"
-                if st.button(lbl, key=f"i{i}", type=btn, use_container_width=True): izn(i); st.rerun()
-            
-            if r['Durum'] != "Yurtta" and (r['Durum']=="İzinli" or r['İzin Durumu']=="İzin Var"):
-                st.success("✅ Öğrenci izinli.")
-            else:
-                st.divider()
-                c3, c4 = st.columns(2)
-                with c3:
-                    s = "primary" if "Yok" in str(r['Etüd']) else "secondary"
-                    if st.button(f"Etüd: {r['Etüd']}", key=f"e{i}", type=s, use_container_width=True): ey(i,"Etüd"); st.rerun()
-                with c4:
-                    s = "primary" if "Yok" in str(r['Yat']) else "secondary"
-                    if st.button(f"Yat: {r['Yat']}", key=f"y{i}", type=s, use_container_width=True): ey(i,"Yat"); st.rerun()
+            # Kart Yapısı
+            with st.expander(f"{ikon} {r['Ad Soyad']}"):
                 
-                if "Yok" in str(r['Etüd']) or "Yok" in str(r['Yat']) or (r['Durum']=="Evde" and r['İzin Durumu']=="İzin Yok"):
-                    st.warning(f"Durum: {r['Mesaj Durumu']}")
+                # DURUM SEÇİMİ
+                st.caption("Durum:")
+                secenekler = ["Yurtta", "İzinli", "Evde"]
+                try: m_idx = secenekler.index(r['Durum'])
+                except: m_idx = 0
+                
+                yeni = st.radio("D", secenekler, index=m_idx, key=f"rd{i}", horizontal=True, label_visibility="collapsed")
+                if yeni != r['Durum']:
+                    st.session_state.df.at[i, "Durum"] = yeni
+                    st.session_state.df.at[i, "Mesaj Durumu"] = "-"
+                    st.rerun()
+
+                # İŞLEMLER
+                if r['Durum'] != "Yurtta":
+                    st.write("")
+                    btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
+                    lbl = "✅ İzinli (Resmi)" if r['İzin Durumu']=="İzin Var" else "⛔ İzinsiz"
+                    if st.button(lbl, key=f"i{i}", type=btn, use_container_width=True): izn(i); st.rerun()
+                
+                if r['Durum'] != "Yurtta" and (r['Durum']=="İzinli" or r['İzin Durumu']=="İzin Var"):
+                    st.success("İzinli.")
+                else:
+                    st.divider()
+                    c3, c4 = st.columns(2)
+                    with c3:
+                        s = "primary" if "Yok" in str(r['Etüd']) else "secondary"
+                        if st.button(f"Etüd: {r['Etüd']}", key=f"e{i}", type=s, use_container_width=True): ey(i,"Etüd"); st.rerun()
+                    with c4:
+                        s = "primary" if "Yok" in str(r['Yat']) else "secondary"
+                        if st.button(f"Yat: {r['Yat']}", key=f"y{i}", type=s, use_container_width=True): ey(i,"Yat"); st.rerun()
                     
-                    mesaj_metni = f"{r['Ad Soyad']} yoklamada yoktur."
-                    link = wp(r['Veli Tel'], mesaj_metni)
-                    
-                    if link:
-                        st.link_button("💬 WhatsApp'tan Yaz", link, use_container_width=True, type="primary")
-                    else:
-                        st.error("⚠️ Telefon No Eksik!")
-                    
-                    if st.button("✅ Mesaj Attım İşaretle", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
+                    if "Yok" in str(r['Etüd']) or "Yok" in str(r['Yat']) or (r['Durum']=="Evde" and r['İzin Durumu']=="İzin Yok"):
+                        st.warning(f"Durum: {r['Mesaj Durumu']}")
+                        link = wp(r['Veli Tel'], f"{r['Ad Soyad']} yoklamada yoktur.")
+                        if link: st.link_button("💬 WhatsApp", link, use_container_width=True, type="primary")
+                        else: st.error("No Eksik")
+                        if st.button("✅ Mesaj Attım", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
 
 elif menu == "➕ EKLE":
     with st.form("ekle"):
@@ -248,4 +254,5 @@ elif menu == "🗄️ GEÇMİŞ":
 elif menu == "📄 PDF":
     u = st.text_input("Belletmen Adı")
     if u: st.download_button("PDF İndir", pdf_yap(st.session_state.df, u), "yoklama.pdf", "application/pdf", type="primary", use_container_width=True)
+
 
