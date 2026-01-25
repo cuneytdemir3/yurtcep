@@ -154,7 +154,6 @@ def wp(tel, m):
     return f"https://wa.me/90{t}?text={urllib.parse.quote(m)}"
 
 def sablon_indir():
-    # Boş bir şablon oluştur
     df_sablon = pd.DataFrame(columns=["Ad Soyad", "Numara", "Oda No", "Baba Adı", "Anne Adı", "Baba Tel", "Anne Tel"])
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -207,16 +206,10 @@ if menu == "📋 LİSTE":
                 yeni = st.radio("D", secenekler, index=m_idx, key=f"rd{i}", horizontal=True, label_visibility="collapsed")
                 if yeni != r['Durum']:
                     st.session_state.df.at[i, "Durum"] = yeni; st.session_state.df.at[i, "Mesaj Durumu"] = "-"; st.rerun()
-
-                if r['Durum'] != "Yurtta":
-                    st.write("")
-                    btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
-                    lbl = "✅ İzinli (Resmi)" if r['İzin Durumu']=="İzin Var" else "⛔ İzinsiz"
-                    if st.button(lbl, key=f"i{i}", type=btn, use_container_width=True): izn(i); st.rerun()
                 
-                if r['Durum'] != "Yurtta" and (r['Durum']=="İzinli" or r['İzin Durumu']=="İzin Var"):
-                    st.success("İzinli.")
-                else:
+                # --- ANA MANTIK: SADECE YURTTA İSE ETÜD/YAT GÖSTER ---
+                
+                if r['Durum'] == "Yurtta":
                     st.divider()
                     c3, c4 = st.columns(2)
                     with c3:
@@ -226,24 +219,48 @@ if menu == "📋 LİSTE":
                         s = "primary" if "Yok" in str(r['Yat']) else "secondary"
                         if st.button(f"Yat: {r['Yat']}", key=f"y{i}", type=s, use_container_width=True): ey(i,"Yat"); st.rerun()
                     
-                    if "Yok" in str(r['Etüd']) or "Yok" in str(r['Yat']) or (r['Durum']=="Evde" and r['İzin Durumu']=="İzin Yok"):
-                        st.warning(f"Durum: {r['Mesaj Durumu']}")
-                        msj_txt = f"{r['Ad Soyad']} yoklamada yoktur."
+                    # Eğer Yurtta ama Etüd veya Yat yoklamasında yoksa
+                    if "Yok" in str(r['Etüd']) or "Yok" in str(r['Yat']):
+                        st.warning("⚠️ Öğrenci Yurtta Ama Yoklamada Yok!")
+                        
+                        msj_txt = ""
+                        if "Yok" in str(r['Etüd']):
+                            msj_txt = f"Öğrenciniz {r['Ad Soyad']} etüd yoklamasına katılmamıştır."
+                        else:
+                            msj_txt = f"Öğrenciniz {r['Ad Soyad']} Yat yoklamasında yurtta bulunmamıştır."
                         
                         link_baba = wp(r['Baba Tel'], msj_txt)
                         link_anne = wp(r['Anne Tel'], msj_txt)
-                        
-                        if link_baba: st.link_button(f"👨 Babaya Yaz ({r['Baba Adı']})", link_baba, use_container_width=True, type="primary")
-                        if link_anne: st.link_button(f"👩 Anneye Yaz ({r['Anne Adı']})", link_anne, use_container_width=True, type="primary")
-                        
-                        if not link_baba and not link_anne: st.error("⚠️ Kayıtlı Telefon Yok!")
-                        
-                        if st.button("✅ Mesaj Attım", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
+                        if link_baba: st.link_button(f"👨 Babaya Yaz", link_baba, use_container_width=True, type="primary")
+                        if link_anne: st.link_button(f"👩 Anneye Yaz", link_anne, use_container_width=True, type="primary")
+                        if st.button("✅ Mesaj Atıldı", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
+
+                elif r['Durum'] == "Evde":
+                    # Evde ise İzin Durumunu sor, ama Etüd/Yat GÖSTERME
+                    st.write("")
+                    btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
+                    lbl = "✅ İzinli (Resmi)" if r['İzin Durumu']=="İzin Var" else "⛔ İzinsiz (Kaçak)"
+                    if st.button(lbl, key=f"i{i}", type=btn, use_container_width=True): izn(i); st.rerun()
+                    
+                    if r['İzin Durumu'] == "İzin Var":
+                         st.success("✅ Öğrenci Evci İzinli.")
+                    else:
+                         # İZİNSİZ EVDE DURUMU -> Direkt Mesaj
+                         st.error("🚨 ÖĞRENCİ İZİNSİZ / KAÇAK!")
+                         msj_txt = f"Öğrenciniz {r['Ad Soyad']} izinsiz olarak yurtta bulunmamaktadır."
+                         
+                         link_baba = wp(r['Baba Tel'], msj_txt)
+                         link_anne = wp(r['Anne Tel'], msj_txt)
+                         if link_baba: st.link_button(f"👨 Babaya Yaz", link_baba, use_container_width=True, type="primary")
+                         if link_anne: st.link_button(f"👩 Anneye Yaz", link_anne, use_container_width=True, type="primary")
+                         if st.button("✅ Mesaj Atıldı", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
+
+                else: # İzinli
+                    st.success("✅ Öğrenci Çarşı/Özel İzinli.")
 
 elif menu == "➕ EKLE":
     st.subheader("Öğrenci Kayıt")
     
-    # İKİ SEKME: MANUEL ve EXCEL
     tab1, tab2 = st.tabs(["✍️ Tek Tek Ekle", "📂 Excel Yükle"])
     
     with tab1:
@@ -266,49 +283,24 @@ elif menu == "➕ EKLE":
 
     with tab2:
         st.info("💡 Excel dosyanızda şu başlıklar olmalı: 'Ad Soyad', 'Numara', 'Oda No', 'Baba Adı', 'Anne Adı', 'Baba Tel', 'Anne Tel'")
-        
-        # Şablon İndirme Butonu
         st.download_button("📥 Örnek Excel Şablonunu İndir", sablon_indir(), "ogrenci_sablon.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-        
         uploaded_file = st.file_uploader("Excel Dosyası Seç", type=["xlsx"])
-        
         if uploaded_file is not None:
             try:
-                # Excel'i Oku
                 df_yeni = pd.read_excel(uploaded_file)
-                
-                # Sütunları string yap ki telefon nolar bozulmasın
                 df_yeni = df_yeni.astype(str)
-                
-                # Gerekli sütunları kontrol et
                 eksik_sutunlar = [c for c in ["Ad Soyad", "Numara", "Oda No"] if c not in df_yeni.columns]
-                
-                if eksik_sutunlar:
-                    st.error(f"Hata: Excel dosyasında şu sütunlar eksik: {eksik_sutunlar}")
+                if eksik_sutunlar: st.error(f"Hata: Excel dosyasında şu sütunlar eksik: {eksik_sutunlar}")
                 else:
-                    # Eksik diğer sütunları tamamla
                     for c in SUTUNLAR:
                         if c not in df_yeni.columns: df_yeni[c] = "-"
-                        
-                    # Varsayılan değerleri ata
-                    df_yeni["Durum"] = "Yurtta"
-                    df_yeni["İzin Durumu"] = "İzin Var"
-                    df_yeni["Etüd"] = "⚪"
-                    df_yeni["Yat"] = "⚪"
-                    df_yeni["Mesaj Durumu"] = "-"
-                    
-                    # 'nan' yazılarını temizle
+                    df_yeni["Durum"] = "Yurtta"; df_yeni["İzin Durumu"] = "İzin Var"; df_yeni["Etüd"] = "⚪"; df_yeni["Yat"] = "⚪"; df_yeni["Mesaj Durumu"] = "-"
                     df_yeni = df_yeni.replace("nan", "-")
-
                     st.dataframe(df_yeni.head())
                     if st.button("✅ Bu Listeyi Kaydet", type="primary"):
                         st.session_state.df = pd.concat([st.session_state.df, df_yeni], ignore_index=True)
-                        kaydet()
-                        st.success(f"{len(df_yeni)} Öğrenci Başarıyla Eklendi!")
-                        time.sleep(2)
-                        st.rerun()
-            except Exception as e:
-                st.error(f"Excel Okuma Hatası: {e}")
+                        kaydet(); st.success(f"{len(df_yeni)} Öğrenci Başarıyla Eklendi!"); time.sleep(2); st.rerun()
+            except Exception as e: st.error(f"Excel Okuma Hatası: {e}")
 
 elif menu == "🗄️ GEÇMİŞ":
     try: d=pd.DataFrame(get_log().get_all_records()); st.dataframe(d[d["Tarih"]==st.selectbox("Tarih", d["Tarih"].unique())], use_container_width=True)
@@ -317,7 +309,5 @@ elif menu == "🗄️ GEÇMİŞ":
 elif menu == "📄 PDF":
     u = st.text_input("Belletmen Adı")
     if u: st.download_button("PDF İndir", pdf_yap(st.session_state.df, u), "yoklama.pdf", "application/pdf", type="primary", use_container_width=True)
-
-
 
 
