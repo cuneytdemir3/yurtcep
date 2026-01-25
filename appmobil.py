@@ -20,7 +20,7 @@ st.set_page_config(page_title="Yurt Mobil", page_icon="📱", layout="centered")
 # --- LİNK AYARI ---
 SHEET_LINKI = "https://docs.google.com/spreadsheets/d/14vue2y63WXYE6-uXqtiEUgGU-yVrBCJy6R6Nj_EdyMI/edit?gid=0#gid=0"
 
-# --- RENK PALETİ (Her oda için farklı pastel renkler) ---
+# --- RENK PALETİ ---
 RENKLER = [
     "#FFEBEE", "#E3F2FD", "#E8F5E9", "#FFF3E0", "#F3E5F5", 
     "#E0F7FA", "#FFFDE7", "#FBE9E7", "#ECEFF1", "#FCE4EC",
@@ -43,6 +43,7 @@ st.markdown("""
         background-color: #f0f2f6;
         border-color: #333;
     }
+    /* WhatsApp Butonları */
     a[kind="primary"] {
         width: 100%;
         border-radius: 12px;
@@ -54,6 +55,7 @@ st.markdown("""
         background-color: #25D366 !important;
         color: white !important;
         border: none;
+        margin-bottom: 5px;
     }
     .streamlit-expanderHeader {
         font-size: 17px !important;
@@ -110,14 +112,22 @@ def get_sheet(): return get_client().open_by_url(SHEET_LINKI).sheet1
 def get_log():
     c = get_client(); s = c.open_by_url(SHEET_LINKI)
     try: return s.worksheet("GECMIS")
-    except: ws = s.add_worksheet("GECMIS", 1000, 12); ws.append_row(["Tarih", "Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Yat", "Mesaj Durumu", "Veli", "Veli Tel"]); return ws
+    except: 
+        ws = s.add_worksheet("GECMIS", 1000, 12)
+        # Yeni sütunlar eklendi
+        ws.append_row(["Tarih", "Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Yat", "Mesaj Durumu", "Baba Adı", "Anne Adı", "Baba Tel", "Anne Tel"])
+        return ws
 
 # --- VERİ YÖNETİMİ ---
+SUTUNLAR = ["Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Yat", "Mesaj Durumu", "Baba Adı", "Anne Adı", "Baba Tel", "Anne Tel"]
+
 if "df" not in st.session_state:
     try:
         d = get_sheet().get_all_records()
-        st.session_state.df = pd.DataFrame(d) if d else pd.DataFrame(columns=["Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Yat", "Mesaj Durumu", "Veli", "Veli Tel"])
-        for c in ["Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Yat", "Mesaj Durumu", "Veli", "Veli Tel"]:
+        st.session_state.df = pd.DataFrame(d) if d else pd.DataFrame(columns=SUTUNLAR)
+        
+        # Eksik sütunları tamamla
+        for c in SUTUNLAR:
             if c not in st.session_state.df.columns: st.session_state.df[c] = "-"
         st.session_state.df = st.session_state.df.fillna("-")
     except Exception as e: st.error(f"Veri Hatası: {e}"); st.stop()
@@ -144,7 +154,7 @@ def pdf_yap(df, user):
 
 def wp(tel, m):
     t = str(tel).replace(' ','').lstrip('0').replace('-','').replace('.','').strip()
-    if not t: return None
+    if not t or len(t) < 10: return None
     return f"https://wa.me/90{t}?text={urllib.parse.quote(m)}"
 
 # İşlemler
@@ -171,34 +181,18 @@ if menu == "📋 LİSTE":
     f_df = st.session_state.df
     if ara: f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(ara, case=False)).any(axis=1)]
 
-    # --- ODA ODA GRUPLAMA MANTIĞI ---
-    
-    # 1. Mevcut odaların listesini al ve sırala
+    # ODA GRUPLAMA
     oda_listesi = sorted(f_df["Oda No"].unique().tolist(), key=str)
-
     st.info(f"Toplam: {len(f_df)} Öğrenci / {len(oda_listesi)} Oda")
     
-    # 2. Her oda için döngü başlat
     for oda in oda_listesi:
-        # Odaya özel renk belirle (Hash mantığıyla hep aynı odaya aynı renk gelir)
         oda_renk = RENKLER[hash(str(oda)) % len(RENKLER)]
+        st.markdown(f"""<div style="background-color: {oda_renk}; padding: 10px; border-radius: 10px; margin-top: 20px; margin-bottom: 10px; border-left: 5px solid #888; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);"><h3 style="margin:0; color: #333; font-size: 18px;">🛏️ ODA {oda}</h3></div>""", unsafe_allow_html=True)
         
-        # ODA BAŞLIĞI (BÖLÜM GİBİ GÖRÜNMESİ İÇİN)
-        st.markdown(f"""
-        <div style="background-color: {oda_renk}; padding: 10px; border-radius: 10px; margin-top: 20px; margin-bottom: 10px; border-left: 5px solid #888; box-shadow: 2px 2px 5px rgba(0,0,0,0.1);">
-            <h3 style="margin:0; color: #333; font-size: 18px;">🛏️ ODA {oda}</h3>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Bu odadaki öğrencileri filtrele
-        oda_ogrencileri = f_df[f_df["Oda No"] == oda]
-        
-        # Öğrencileri listele
-        for i in oda_ogrencileri.index:
+        for i in f_df[f_df["Oda No"] == oda].index:
             r = f_df.loc[i]
             ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵"}.get(r['Durum'], "⚪")
             
-            # Kart Yapısı
             with st.expander(f"{ikon} {r['Ad Soyad']}"):
                 
                 # DURUM SEÇİMİ
@@ -206,14 +200,10 @@ if menu == "📋 LİSTE":
                 secenekler = ["Yurtta", "İzinli", "Evde"]
                 try: m_idx = secenekler.index(r['Durum'])
                 except: m_idx = 0
-                
                 yeni = st.radio("D", secenekler, index=m_idx, key=f"rd{i}", horizontal=True, label_visibility="collapsed")
                 if yeni != r['Durum']:
-                    st.session_state.df.at[i, "Durum"] = yeni
-                    st.session_state.df.at[i, "Mesaj Durumu"] = "-"
-                    st.rerun()
+                    st.session_state.df.at[i, "Durum"] = yeni; st.session_state.df.at[i, "Mesaj Durumu"] = "-"; st.rerun()
 
-                # İŞLEMLER
                 if r['Durum'] != "Yurtta":
                     st.write("")
                     btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
@@ -234,18 +224,41 @@ if menu == "📋 LİSTE":
                     
                     if "Yok" in str(r['Etüd']) or "Yok" in str(r['Yat']) or (r['Durum']=="Evde" and r['İzin Durumu']=="İzin Yok"):
                         st.warning(f"Durum: {r['Mesaj Durumu']}")
-                        link = wp(r['Veli Tel'], f"{r['Ad Soyad']} yoklamada yoktur.")
-                        if link: st.link_button("💬 WhatsApp", link, use_container_width=True, type="primary")
-                        else: st.error("No Eksik")
+                        msj_txt = f"{r['Ad Soyad']} yoklamada yoktur."
+                        
+                        # --- YENİ WHATSAPP SİSTEMİ (ANNE & BABA) ---
+                        link_baba = wp(r['Baba Tel'], msj_txt)
+                        link_anne = wp(r['Anne Tel'], msj_txt)
+                        
+                        if link_baba: st.link_button(f"👨 Babaya Yaz ({r['Baba Adı']})", link_baba, use_container_width=True, type="primary")
+                        if link_anne: st.link_button(f"👩 Anneye Yaz ({r['Anne Adı']})", link_anne, use_container_width=True, type="primary")
+                        
+                        if not link_baba and not link_anne: st.error("⚠️ Kayıtlı Telefon Yok!")
+                        
                         if st.button("✅ Mesaj Attım", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
 
 elif menu == "➕ EKLE":
+    st.subheader("Yeni Öğrenci Kartı")
     with st.form("ekle"):
-        ad=st.text_input("Ad Soyad"); no=st.text_input("No"); oda=st.text_input("Oda")
-        veli=st.text_input("Veli"); tel=st.text_input("Tel")
-        if st.form_submit_button("Kaydet", type="primary"):
-            y = pd.DataFrame([{"Ad Soyad":ad,"Numara":no,"Oda No":oda,"Durum":"Yurtta","İzin Durumu":"İzin Var","Etüd":"⚪","Yat":"⚪","Mesaj Durumu":"-","Veli":veli,"Veli Tel":tel}])
-            st.session_state.df = pd.concat([st.session_state.df, y], ignore_index=True); kaydet(); st.success("Eklendi")
+        ad=st.text_input("Öğrenci Adı Soyadı")
+        c1, c2 = st.columns(2)
+        no=c1.text_input("Okul No"); oda=c2.text_input("Oda No")
+        
+        st.divider()
+        st.caption("Aile Bilgileri")
+        b_ad = st.text_input("Baba Adı")
+        b_tel = st.text_input("Baba Tel (5xx...)")
+        a_ad = st.text_input("Anne Adı")
+        a_tel = st.text_input("Anne Tel (5xx...)")
+        
+        if st.form_submit_button("Öğrenciyi Kaydet", type="primary"):
+            y = pd.DataFrame([{
+                "Ad Soyad":ad, "Numara":no, "Oda No":oda, "Durum":"Yurtta", "İzin Durumu":"İzin Var", 
+                "Etüd":"⚪", "Yat":"⚪", "Mesaj Durumu":"-", 
+                "Baba Adı":b_ad, "Anne Adı":a_ad, "Baba Tel":b_tel, "Anne Tel":a_tel
+            }])
+            st.session_state.df = pd.concat([st.session_state.df, y], ignore_index=True)
+            kaydet(); st.success("Eklendi")
 
 elif menu == "🗄️ GEÇMİŞ":
     try: d=pd.DataFrame(get_log().get_all_records()); st.dataframe(d[d["Tarih"]==st.selectbox("Tarih", d["Tarih"].unique())], use_container_width=True)
