@@ -36,7 +36,6 @@ st.markdown("""
         background-color: #f0f2f6;
         border-color: #333;
     }
-    /* Link Butonu (WhatsApp) için özel stil */
     a[kind="primary"] {
         width: 100%;
         border-radius: 12px;
@@ -45,7 +44,7 @@ st.markdown("""
         font-weight: bold;
         text-decoration: none;
         display: inline-block;
-        background-color: #25D366 !important; /* WhatsApp Yeşili */
+        background-color: #25D366 !important;
         color: white !important;
         border: none;
     }
@@ -130,11 +129,8 @@ def pdf_yap(df, user):
     t = Table(data, colWidths=[90,30,30,30,30,30,30,40]); t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1),f),('FONTSIZE',(0,0),(-1,-1),8)])); t.wrapOn(c, w, h); t.drawOn(c, 40, h-(100+len(data)*20)); c.save(); b.seek(0); return b
 
 def wp(tel, m):
-    # Telefon numarasını temizle
     t = str(tel).replace(' ','').lstrip('0').replace('-','').replace('.','').strip()
-    # Numara yoksa boş dön
     if not t: return None
-    # Link oluştur
     return f"https://wa.me/90{t}?text={urllib.parse.quote(m)}"
 
 # İşlemler
@@ -175,4 +171,47 @@ if menu == "📋 LİSTE":
             with col2:
                 if r['Durum'] != "Yurtta":
                     btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
-                    lbl = "✅ İzinli" if r['İzin Durumu']=="İzin Var"
+                    # DÜZELTİLEN SATIR BURASI: "else" EKLENDİ
+                    lbl = "✅ İzinli" if r['İzin Durumu']=="İzin Var" else "⛔ İzinsiz"
+                    if st.button(lbl, key=f"i{i}", type=btn, use_container_width=True): izn(i); st.rerun()
+            
+            if r['Durum'] != "Yurtta" and (r['Durum']=="İzinli" or r['İzin Durumu']=="İzin Var"):
+                st.caption("İzinli olduğu için yoklama gerekmez.")
+            else:
+                st.divider()
+                c3, c4 = st.columns(2)
+                with c3:
+                    s = "primary" if "Yok" in str(r['Etüd']) else "secondary"
+                    if st.button(f"Etüd: {r['Etüd']}", key=f"e{i}", type=s, use_container_width=True): ey(i,"Etüd"); st.rerun()
+                with c4:
+                    s = "primary" if "Yok" in str(r['Yat']) else "secondary"
+                    if st.button(f"Yat: {r['Yat']}", key=f"y{i}", type=s, use_container_width=True): ey(i,"Yat"); st.rerun()
+                
+                if "Yok" in str(r['Etüd']) or "Yok" in str(r['Yat']) or (r['Durum']=="Evde" and r['İzin Durumu']=="İzin Yok"):
+                    st.warning(f"Durum: {r['Mesaj Durumu']}")
+                    
+                    mesaj_metni = f"{r['Ad Soyad']} yoklamada yoktur."
+                    link = wp(r['Veli Tel'], mesaj_metni)
+                    
+                    if link:
+                        st.link_button("💬 WhatsApp'tan Yaz", link, use_container_width=True, type="primary")
+                    else:
+                        st.error("⚠️ Telefon No Eksik!")
+                    
+                    if st.button("✅ Mesaj Attım İşaretle", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
+
+elif menu == "➕ EKLE":
+    with st.form("ekle"):
+        ad=st.text_input("Ad Soyad"); no=st.text_input("No"); oda=st.text_input("Oda")
+        veli=st.text_input("Veli"); tel=st.text_input("Tel")
+        if st.form_submit_button("Kaydet", type="primary"):
+            y = pd.DataFrame([{"Ad Soyad":ad,"Numara":no,"Oda No":oda,"Durum":"Yurtta","İzin Durumu":"İzin Var","Etüd":"⚪","Yat":"⚪","Mesaj Durumu":"-","Veli":veli,"Veli Tel":tel}])
+            st.session_state.df = pd.concat([st.session_state.df, y], ignore_index=True); kaydet(); st.success("Eklendi")
+
+elif menu == "🗄️ GEÇMİŞ":
+    try: d=pd.DataFrame(get_log().get_all_records()); st.dataframe(d[d["Tarih"]==st.selectbox("Tarih", d["Tarih"].unique())], use_container_width=True)
+    except: st.info("Kayıt yok")
+
+elif menu == "📄 PDF":
+    u = st.text_input("Belletmen Adı")
+    if u: st.download_button("PDF İndir", pdf_yap(st.session_state.df, u), "yoklama.pdf", "application/pdf", type="primary", use_container_width=True)
