@@ -269,3 +269,4 @@ elif menu == "📄 PDF":
     if u: st.download_button("PDF İndir", pdf_yap(st.session_state.df, u), "yoklama.pdf", "application/pdf", type="primary", use_container_width=True)
 
 
+
