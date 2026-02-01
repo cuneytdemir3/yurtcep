@@ -138,15 +138,32 @@ def arsivle():
         get_log().append_rows(d.astype(str).values.tolist()); st.success(f"✅ {t} Arşivlendi!"); st.balloons()
     except: st.error("Arşiv Hatası")
 
-def pdf_yap(df, user):
+# --- PDF OLUŞTURMA (GÜNCELLENDİ: 3 Belletmen) ---
+def pdf_yap(df, b1, b2, b3):
     b = BytesIO(); c = canvas.Canvas(b, pagesize=A4); w, h = A4
     try: pdfmetrics.registerFont(TTFont('Arial', 'C:\\Windows\\Fonts\\arial.ttf')); f = 'Arial'
     except: f = 'Helvetica'
-    c.setFont(f, 16); c.drawString(40, h-50, "YURT YOKLAMA"); c.setFont(f, 10); c.drawString(40, h-70, f"Tarih: {datetime.now().strftime('%d.%m.%Y')}"); c.drawRightString(w-40, h-70, f"Belletmen: {user}"); c.line(40, h-80, w-40, h-80)
+    
+    # Başlık
+    c.setFont(f, 16); c.drawString(40, h-50, "YURT YOKLAMA LİSTESİ")
+    c.setFont(f, 10); c.drawString(40, h-75, f"Tarih: {datetime.now().strftime('%d.%m.%Y')}")
+    
+    # Sağ Üst Köşe (3 Belletmen)
+    c.setFont(f, 9)
+    c.drawRightString(w-40, h-50, f"1. Kat Belletmen: {b1}")
+    c.drawRightString(w-40, h-62, f"2. Kat Belletmen: {b2}")
+    c.drawRightString(w-40, h-74, f"3. Kat Belletmen: {b3}")
+    
+    c.line(40, h-85, w-40, h-85)
+    
     data = [["Ad", "No", "Oda", "Drm", "İzin", "Etüd", "Yat", "Msj"]]
     for _, r in df.sort_values("Oda No").iterrows():
         data.append([str(r['Ad Soyad'])[:15], str(r['Numara']), str(r['Oda No']), str(r['Durum'])[0], "-" if r['Durum']=="Yurtta" else str(r['İzin Durumu'])[0], str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), str(r['Yat']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), "OK" if "Atıldı" in str(r['Mesaj Durumu']) else ""])
-    t = Table(data, colWidths=[90,30,30,30,30,30,30,40]); t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1),f),('FONTSIZE',(0,0),(-1,-1),8)])); t.wrapOn(c, w, h); t.drawOn(c, 40, h-(100+len(data)*20)); c.save(); b.seek(0); return b
+    
+    # Tabloyu biraz aşağı kaydırdık ki isimlerle çakışmasın
+    t = Table(data, colWidths=[90,30,30,30,30,30,30,40]); t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1),f),('FONTSIZE',(0,0),(-1,-1),8)]))
+    t.wrapOn(c, w, h); t.drawOn(c, 40, h-(110+len(data)*20))
+    c.save(); b.seek(0); return b
 
 def wp(tel, m):
     t = str(tel).replace(' ','').lstrip('0').replace('-','').replace('.','').strip()
@@ -252,7 +269,6 @@ if menu == "📋 LİSTE":
                     st.info("ℹ️ Öğrenci Çarşı/Özel İzinli")
                     st.caption("Çarşı izninde olduğu için Etüd'den muaftır. Ancak Yat Yoklaması alabilirsiniz.")
                     
-                    # Sadece Yat Yoklaması Butonu
                     s_yat = "primary" if "Yok" in str(r['Yat']) else "secondary"
                     if st.button(f"🛏️ Yat: {r['Yat']}", key=f"iy{i}", type=s_yat, use_container_width=True): ey(i,"Yat"); st.rerun()
 
@@ -315,8 +331,15 @@ elif menu == "🗄️ GEÇMİŞ":
     except: st.info("Kayıt yok")
 
 elif menu == "📄 PDF":
-    u = st.text_input("Belletmen Adı")
-    if u: st.download_button("PDF İndir", pdf_yap(st.session_state.df, u), "yoklama.pdf", "application/pdf", type="primary", use_container_width=True)
+    st.subheader("PDF Raporu Oluştur")
+    c1, c2, c3 = st.columns(3)
+    b1 = c1.text_input("1. Kat Belletmen")
+    b2 = c2.text_input("2. Kat Belletmen")
+    b3 = c3.text_input("3. Kat Belletmen")
+    
+    if st.button("PDF Oluştur ve İndir", type="primary"):
+        pdf_dosyasi = pdf_yap(st.session_state.df, b1, b2, b3)
+        st.download_button("⬇️ Dosyayı İndir", pdf_dosyasi, "yoklama.pdf", "application/pdf")
 
 
 
