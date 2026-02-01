@@ -167,7 +167,7 @@ def msj(i,m): st.session_state.df.at[i,"Mesaj Durumu"]=m
 
 # --- ARAYÜZ ---
 c1, c2 = st.columns([3,1])
-with c1: st.title("📱 Mobil Takip")
+with c1: st.title("📱 Mobil SOBİL Yurt  Takip")
 with c2: 
     if st.button("🔄"): st.cache_data.clear(); st.rerun()
 
@@ -309,5 +309,6 @@ elif menu == "🗄️ GEÇMİŞ":
 elif menu == "📄 PDF":
     u = st.text_input("Belletmen Adı")
     if u: st.download_button("PDF İndir", pdf_yap(st.session_state.df, u), "yoklama.pdf", "application/pdf", type="primary", use_container_width=True)
+
 
 
