@@ -167,7 +167,7 @@ def msj(i,m): st.session_state.df.at[i,"Mesaj Durumu"]=m
 
 # --- ARAYÜZ ---
 c1, c2 = st.columns([3,1])
-with c1: st.title("📱 Mobil SOBİL Yurt  Takip")
+with c1: st.title("📱 Mobil Takip")
 with c2: 
     if st.button("🔄"): st.cache_data.clear(); st.rerun()
 
@@ -207,8 +207,7 @@ if menu == "📋 LİSTE":
                 if yeni != r['Durum']:
                     st.session_state.df.at[i, "Durum"] = yeni; st.session_state.df.at[i, "Mesaj Durumu"] = "-"; st.rerun()
                 
-                # --- ANA MANTIK: SADECE YURTTA İSE ETÜD/YAT GÖSTER ---
-                
+                # --- DURUM 1: YURTTA (Tam Kontrol) ---
                 if r['Durum'] == "Yurtta":
                     st.divider()
                     c3, c4 = st.columns(2)
@@ -219,15 +218,9 @@ if menu == "📋 LİSTE":
                         s = "primary" if "Yok" in str(r['Yat']) else "secondary"
                         if st.button(f"Yat: {r['Yat']}", key=f"y{i}", type=s, use_container_width=True): ey(i,"Yat"); st.rerun()
                     
-                    # Eğer Yurtta ama Etüd veya Yat yoklamasında yoksa
                     if "Yok" in str(r['Etüd']) or "Yok" in str(r['Yat']):
                         st.warning("⚠️ Öğrenci Yurtta Ama Yoklamada Yok!")
-                        
-                        msj_txt = ""
-                        if "Yok" in str(r['Etüd']):
-                            msj_txt = f"Öğrenciniz {r['Ad Soyad']} etüd yoklamasına katılmamıştır."
-                        else:
-                            msj_txt = f"Öğrenciniz {r['Ad Soyad']} Yat yoklamasında yurtta bulunmamıştır."
+                        msj_txt = f"Öğrenciniz {r['Ad Soyad']} etüd yoklamasına katılmamıştır." if "Yok" in str(r['Etüd']) else f"Öğrenciniz {r['Ad Soyad']} Yat yoklamasında yurtta bulunmamıştır."
                         
                         link_baba = wp(r['Baba Tel'], msj_txt)
                         link_anne = wp(r['Anne Tel'], msj_txt)
@@ -235,8 +228,8 @@ if menu == "📋 LİSTE":
                         if link_anne: st.link_button(f"👩 Anneye Yaz", link_anne, use_container_width=True, type="primary")
                         if st.button("✅ Mesaj Atıldı", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
 
+                # --- DURUM 2: EVDE (Evci İzni) ---
                 elif r['Durum'] == "Evde":
-                    # Evde ise İzin Durumunu sor, ama Etüd/Yat GÖSTERME
                     st.write("")
                     btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
                     lbl = "✅ İzinli (Resmi)" if r['İzin Durumu']=="İzin Var" else "⛔ İzinsiz (Kaçak)"
@@ -245,7 +238,6 @@ if menu == "📋 LİSTE":
                     if r['İzin Durumu'] == "İzin Var":
                          st.success("✅ Öğrenci Evci İzinli.")
                     else:
-                         # İZİNSİZ EVDE DURUMU -> Direkt Mesaj
                          st.error("🚨 ÖĞRENCİ İZİNSİZ / KAÇAK!")
                          msj_txt = f"Öğrenciniz {r['Ad Soyad']} izinsiz olarak yurtta bulunmamaktadır."
                          
@@ -255,8 +247,24 @@ if menu == "📋 LİSTE":
                          if link_anne: st.link_button(f"👩 Anneye Yaz", link_anne, use_container_width=True, type="primary")
                          if st.button("✅ Mesaj Atıldı", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
 
-                else: # İzinli
-                    st.success("✅ Öğrenci Çarşı/Özel İzinli.")
+                # --- DURUM 3: İZİNLİ (Çarşı/Özel İzin) ---
+                else: 
+                    st.info("ℹ️ Öğrenci Çarşı/Özel İzinli")
+                    st.caption("Çarşı izninde olduğu için Etüd'den muaftır. Ancak Yat Yoklaması alabilirsiniz.")
+                    
+                    # Sadece Yat Yoklaması Butonu
+                    s_yat = "primary" if "Yok" in str(r['Yat']) else "secondary"
+                    if st.button(f"🛏️ Yat: {r['Yat']}", key=f"iy{i}", type=s_yat, use_container_width=True): ey(i,"Yat"); st.rerun()
+
+                    if "Yok" in str(r['Yat']):
+                        st.warning("⚠️ İzinli ama Yat Saati Gelmedi!")
+                        msj_txt = f"Öğrenciniz {r['Ad Soyad']} izinli olmasına rağmen Yat yoklamasında yurda giriş yapmamıştır."
+                        
+                        link_baba = wp(r['Baba Tel'], msj_txt)
+                        link_anne = wp(r['Anne Tel'], msj_txt)
+                        if link_baba: st.link_button(f"👨 Babaya Yaz", link_baba, use_container_width=True, type="primary")
+                        if link_anne: st.link_button(f"👩 Anneye Yaz", link_anne, use_container_width=True, type="primary")
+                        if st.button("✅ Mesaj Atıldı", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
 
 elif menu == "➕ EKLE":
     st.subheader("Öğrenci Kayıt")
