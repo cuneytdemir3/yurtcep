@@ -58,13 +58,15 @@ st.markdown("""
         border: none;
         margin-bottom: 5px;
     }
+    /* Expander (Açılır Kutu) Başlıkları */
     .streamlit-expanderHeader {
-        font-size: 16px !important;
-        font-weight: 600 !important;
-        background-color: #ffffff;
-        border: 1px solid #eee;
-        border-radius: 8px;
+        font-size: 18px !important;
+        font-weight: 700 !important;
+        background-color: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 10px;
         margin-bottom: 5px;
+        color: #333 !important;
     }
     div[role="radiogroup"] {
         background-color: #f9f9f9;
@@ -76,13 +78,13 @@ st.markdown("""
         font-size: 16px;
         border-radius: 10px;
     }
+    /* Kat Renkli Başlık (İçerideki) */
     .kat-baslik {
-        padding: 15px;
-        border-radius: 10px;
-        margin-top: 30px;
+        padding: 10px;
+        border-radius: 8px;
         margin-bottom: 15px;
-        border-left: 8px solid #555;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-left: 5px solid #666;
+        text-align: center;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -238,70 +240,78 @@ if menu == "📋 LİSTE":
     kat_sirasi = ["1. KAT", "2. KAT", "3. KAT", "DİĞER"]
     st.info(f"Toplam: {len(f_df)} Öğrenci")
 
+    # --- KAT DÖNGÜSÜ ---
     for kat in kat_sirasi:
         kat_df = f_df[f_df["_Kat_Grubu"] == kat]
+        
         if not kat_df.empty:
-            renk = KAT_RENKLERI.get(kat, "#eee")
-            st.markdown(f"""<div class="kat-baslik" style="background-color: {renk};"><h2 style="margin:0; color:#333;">🏢 {kat}</h2></div>""", unsafe_allow_html=True)
-            odalar = sorted(kat_df["Oda No"].unique().tolist(), key=str)
-            for oda in odalar:
-                st.markdown(f"##### 🛏️ Oda {oda}")
-                for i in kat_df[kat_df["Oda No"] == oda].index:
-                    r = f_df.loc[i]
-                    ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵"}.get(r['Durum'], "⚪")
-                    
-                    with st.expander(f"{ikon} {r['Ad Soyad']}"):
-                        st.caption("Durum:")
-                        secenekler = ["Yurtta", "İzinli", "Evde"]
-                        try: m_idx = secenekler.index(r['Durum'])
-                        except: m_idx = 0
-                        yeni = st.radio("D", secenekler, index=m_idx, key=f"rd{i}", horizontal=True, label_visibility="collapsed")
-                        if yeni != r['Durum']:
-                            st.session_state.df.at[i, "Durum"] = yeni; st.session_state.df.at[i, "Mesaj Durumu"] = "-"; st.rerun()
+            # --- BURASI DEĞİŞTİ: ST.EXPANDER EKLENDİ ---
+            # Artık katlar birer açılır/kapanır kutu oldu.
+            with st.expander(f"🏢 {kat} ({len(kat_df)} Öğrenci)", expanded=False):
+                
+                # İçeride renkli bir başlık da olsun, şık durur
+                renk = KAT_RENKLERI.get(kat, "#eee")
+                st.markdown(f"""<div class="kat-baslik" style="background-color: {renk}; font-weight:bold;">{kat} LİSTESİ</div>""", unsafe_allow_html=True)
+
+                odalar = sorted(kat_df["Oda No"].unique().tolist(), key=str)
+                for oda in odalar:
+                    st.markdown(f"##### 🛏️ Oda {oda}")
+                    for i in kat_df[kat_df["Oda No"] == oda].index:
+                        r = f_df.loc[i]
+                        ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵"}.get(r['Durum'], "⚪")
                         
-                        if r['Durum'] == "Yurtta":
-                            st.divider()
-                            c3, c4 = st.columns(2)
-                            with c3:
-                                s = "primary" if "Yok" in str(r['Etüd']) else "secondary"
-                                if st.button(f"Etüd: {r['Etüd']}", key=f"e{i}", type=s, use_container_width=True): ey(i,"Etüd"); st.rerun()
-                            with c4:
-                                s = "primary" if "Yok" in str(r['Yat']) else "secondary"
-                                if st.button(f"Yat: {r['Yat']}", key=f"y{i}", type=s, use_container_width=True): ey(i,"Yat"); st.rerun()
+                        with st.expander(f"{ikon} {r['Ad Soyad']}"):
+                            st.caption("Durum:")
+                            secenekler = ["Yurtta", "İzinli", "Evde"]
+                            try: m_idx = secenekler.index(r['Durum'])
+                            except: m_idx = 0
+                            yeni = st.radio("D", secenekler, index=m_idx, key=f"rd{i}", horizontal=True, label_visibility="collapsed")
+                            if yeni != r['Durum']:
+                                st.session_state.df.at[i, "Durum"] = yeni; st.session_state.df.at[i, "Mesaj Durumu"] = "-"; st.rerun()
                             
-                            if "Yok" in str(r['Etüd']) or "Yok" in str(r['Yat']):
-                                st.warning("⚠️ Yoklamada Yok!")
-                                msj_txt = f"Öğrenciniz {r['Ad Soyad']} etüd yoklamasına katılmamıştır." if "Yok" in str(r['Etüd']) else f"Öğrenciniz {r['Ad Soyad']} Yat yoklamasında yurtta bulunmamıştır."
-                                lb = wp(r['Baba Tel'], msj_txt); la = wp(r['Anne Tel'], msj_txt)
-                                if lb: st.link_button(f"👨 Baba", lb, use_container_width=True, type="primary")
-                                if la: st.link_button(f"👩 Anne", la, use_container_width=True, type="primary")
-                                if st.button("✅ Mesaj Atıldı", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
+                            if r['Durum'] == "Yurtta":
+                                st.divider()
+                                c3, c4 = st.columns(2)
+                                with c3:
+                                    s = "primary" if "Yok" in str(r['Etüd']) else "secondary"
+                                    if st.button(f"Etüd: {r['Etüd']}", key=f"e{i}", type=s, use_container_width=True): ey(i,"Etüd"); st.rerun()
+                                with c4:
+                                    s = "primary" if "Yok" in str(r['Yat']) else "secondary"
+                                    if st.button(f"Yat: {r['Yat']}", key=f"y{i}", type=s, use_container_width=True): ey(i,"Yat"); st.rerun()
+                                
+                                if "Yok" in str(r['Etüd']) or "Yok" in str(r['Yat']):
+                                    st.warning("⚠️ Yoklamada Yok!")
+                                    msj_txt = f"Öğrenciniz {r['Ad Soyad']} etüd yoklamasına katılmamıştır." if "Yok" in str(r['Etüd']) else f"Öğrenciniz {r['Ad Soyad']} Yat yoklamasında yurtta bulunmamıştır."
+                                    lb = wp(r['Baba Tel'], msj_txt); la = wp(r['Anne Tel'], msj_txt)
+                                    if lb: st.link_button(f"👨 Baba", lb, use_container_width=True, type="primary")
+                                    if la: st.link_button(f"👩 Anne", la, use_container_width=True, type="primary")
+                                    if st.button("✅ Mesaj Atıldı", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
 
-                        elif r['Durum'] == "Evde":
-                            st.write("")
-                            btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
-                            lbl = "✅ İzinli" if r['İzin Durumu']=="İzin Var" else "⛔ İzinsiz"
-                            if st.button(lbl, key=f"i{i}", type=btn, use_container_width=True): izn(i); st.rerun()
-                            if r['İzin Durumu'] == "İzin Var": st.success("Evci İzinli.")
-                            else:
-                                 st.error("🚨 KAÇAK!")
-                                 msj_txt = f"Öğrenciniz {r['Ad Soyad']} izinsiz olarak yurtta bulunmamaktadır."
-                                 lb = wp(r['Baba Tel'], msj_txt); la = wp(r['Anne Tel'], msj_txt)
-                                 if lb: st.link_button("👨 Baba", lb, use_container_width=True, type="primary")
-                                 if la: st.link_button("👩 Anne", la, use_container_width=True, type="primary")
-                                 if st.button("✅ Ok", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
+                            elif r['Durum'] == "Evde":
+                                st.write("")
+                                btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
+                                lbl = "✅ İzinli" if r['İzin Durumu']=="İzin Var" else "⛔ İzinsiz"
+                                if st.button(lbl, key=f"i{i}", type=btn, use_container_width=True): izn(i); st.rerun()
+                                if r['İzin Durumu'] == "İzin Var": st.success("Evci İzinli.")
+                                else:
+                                     st.error("🚨 KAÇAK!")
+                                     msj_txt = f"Öğrenciniz {r['Ad Soyad']} izinsiz olarak yurtta bulunmamaktadır."
+                                     lb = wp(r['Baba Tel'], msj_txt); la = wp(r['Anne Tel'], msj_txt)
+                                     if lb: st.link_button("👨 Baba", lb, use_container_width=True, type="primary")
+                                     if la: st.link_button("👩 Anne", la, use_container_width=True, type="primary")
+                                     if st.button("✅ Ok", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
 
-                        else: 
-                            st.info("Çarşı İzinli")
-                            s_yat = "primary" if "Yok" in str(r['Yat']) else "secondary"
-                            if st.button(f"🛏️ Yat: {r['Yat']}", key=f"iy{i}", type=s_yat, use_container_width=True): ey(i,"Yat"); st.rerun()
-                            if "Yok" in str(r['Yat']):
-                                st.warning("⚠️ Dönmedi!")
-                                msj_txt = f"Öğrenciniz {r['Ad Soyad']} izinli olmasına rağmen Yat yoklamasında yurda giriş yapmamıştır."
-                                lb = wp(r['Baba Tel'], msj_txt); la = wp(r['Anne Tel'], msj_txt)
-                                if lb: st.link_button("👨 Baba", lb, use_container_width=True, type="primary")
-                                if la: st.link_button("👩 Anne", la, use_container_width=True, type="primary")
-                                if st.button("✅ Ok", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
+                            else: 
+                                st.info("Çarşı İzinli")
+                                s_yat = "primary" if "Yok" in str(r['Yat']) else "secondary"
+                                if st.button(f"🛏️ Yat: {r['Yat']}", key=f"iy{i}", type=s_yat, use_container_width=True): ey(i,"Yat"); st.rerun()
+                                if "Yok" in str(r['Yat']):
+                                    st.warning("⚠️ Dönmedi!")
+                                    msj_txt = f"Öğrenciniz {r['Ad Soyad']} izinli olmasına rağmen Yat yoklamasında yurda giriş yapmamıştır."
+                                    lb = wp(r['Baba Tel'], msj_txt); la = wp(r['Anne Tel'], msj_txt)
+                                    if lb: st.link_button("👨 Baba", lb, use_container_width=True, type="primary")
+                                    if la: st.link_button("👩 Anne", la, use_container_width=True, type="primary")
+                                    if st.button("✅ Ok", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
 
 elif menu == "📝 TUTANAK":
     st.subheader("📝 Günlük Kat Tutanakları")
@@ -367,6 +377,7 @@ elif menu == "📄 PDF":
     b1 = c1.text_input("1. Kat Belletmen"); b2 = c2.text_input("2. Kat Belletmen"); b3 = c3.text_input("3. Kat Belletmen")
     if st.button("PDF Oluştur", type="primary"):
         st.download_button("⬇️ İndir", pdf_yap(st.session_state.df, b1, b2, b3, st.session_state.tutanak_1, st.session_state.tutanak_2, st.session_state.tutanak_3), "yoklama.pdf", "application/pdf")
+
 
 
 
