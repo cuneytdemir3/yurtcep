@@ -58,9 +58,8 @@ st.markdown("""
         border: none;
         margin-bottom: 5px;
     }
-    /* Expander (Açılır Kutu) Başlıkları */
     .streamlit-expanderHeader {
-        font-size: 18px !important;
+        font-size: 16px !important;
         font-weight: 700 !important;
         background-color: #f8f9fa;
         border: 1px solid #ddd;
@@ -78,7 +77,6 @@ st.markdown("""
         font-size: 16px;
         border-radius: 10px;
     }
-    /* Kat Renkli Başlık (İçerideki) */
     .kat-baslik {
         padding: 10px;
         border-radius: 8px;
@@ -135,6 +133,7 @@ if "tutanak_1" not in st.session_state: st.session_state.tutanak_1 = "Olumsuz bi
 if "tutanak_2" not in st.session_state: st.session_state.tutanak_2 = "Olumsuz bir durum yoktur."
 if "tutanak_3" not in st.session_state: st.session_state.tutanak_3 = "Olumsuz bir durum yoktur."
 
+# Verileri her zaman taze çekmek için
 if "df" not in st.session_state:
     try:
         d = get_sheet().get_all_records()
@@ -145,14 +144,29 @@ if "df" not in st.session_state:
     except Exception as e: st.error(f"Veri Hatası: {e}"); st.stop()
 
 def kaydet():
-    try: get_sheet().update([st.session_state.df.columns.tolist()] + st.session_state.df.astype(str).values.tolist()); st.toast("✅ Kaydedildi!")
-    except: st.error("Kaydetme Hatası")
+    # Bu fonksiyon artık her işlemde çalışacak ve Google Sheets'i güncelleyecek
+    try: 
+        get_sheet().update([st.session_state.df.columns.tolist()] + st.session_state.df.astype(str).values.tolist())
+        # Anlık kayıt olduğu için sürekli Toast (bildirim) çıkarmayalım, kullanıcıyı yorar.
+        # Sadece sessizce kaydetsin.
+    except: 
+        st.error("Bağlantı Hatası! Kaydedilemedi.")
 
 def arsivle():
     try:
         t = datetime.now().strftime("%d.%m.%Y"); d = st.session_state.df.copy(); d.insert(0, "Tarih", t)
         get_log().append_rows(d.astype(str).values.tolist()); st.success(f"✅ {t} Arşivlendi!"); st.balloons()
     except: st.error("Arşiv Hatası")
+
+def sifirla_yeni_yoklama():
+    st.session_state.df["Durum"] = "Belirsiz"
+    st.session_state.df["Etüd"] = "⚪"
+    st.session_state.df["Yat"] = "⚪"
+    st.session_state.df["Mesaj Durumu"] = "-"
+    kaydet() # Hemen kaydet ki sheet de sıfırlansın
+    st.success("Tüm liste sıfırlandı! Yoklamaya başlayabilirsiniz.")
+    time.sleep(1)
+    st.rerun()
 
 # --- PDF ---
 def pdf_yap(df, b1, b2, b3, t1, t2, t3):
@@ -168,7 +182,8 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     
     data = [["Ad", "No", "Oda", "Drm", "İzin", "Etüd", "Yat", "Msj"]]
     for _, r in df.sort_values("Oda No").iterrows():
-        data.append([str(r['Ad Soyad'])[:15], str(r['Numara']), str(r['Oda No']), str(r['Durum'])[0], "-" if r['Durum']=="Yurtta" else str(r['İzin Durumu'])[0], str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), str(r['Yat']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), "OK" if "Atıldı" in str(r['Mesaj Durumu']) else ""])
+        durum_kisa = r['Durum'][0] if r['Durum'] != "Belirsiz" else "?"
+        data.append([str(r['Ad Soyad'])[:15], str(r['Numara']), str(r['Oda No']), durum_kisa, "-" if r['Durum']=="Yurtta" else str(r['İzin Durumu'])[0], str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), str(r['Yat']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), "OK" if "Atıldı" in str(r['Mesaj Durumu']) else ""])
     
     t = Table(data, colWidths=[90,30,30,30,30,30,30,40]); t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1),f),('FONTSIZE',(0,0),(-1,-1),8)]))
     t.wrapOn(c, w, h); t.drawOn(c, 40, h-(110+len(data)*20))
@@ -212,23 +227,39 @@ def kat_bul(oda_no):
         else: return "DİĞER"
     except: return "DİĞER"
 
-# İşlemler
-def izn(i): st.session_state.df.at[i,"İzin Durumu"]="İzin Yok" if st.session_state.df.at[i,"İzin Durumu"]=="İzin Var" else "İzin Var"
-def ey(i,t): st.session_state.df.at[i,t]={"⚪":"✅ Var","✅ Var":"❌ Yok","❌ Yok":"⚪"}.get(st.session_state.df.at[i,t],"⚪")
-def msj(i,m): st.session_state.df.at[i,"Mesaj Durumu"]=m
+# --- İŞLEM FONKSİYONLARI (ANLIK KAYIT EKLENDİ) ---
+def izn(i): 
+    st.session_state.df.at[i,"İzin Durumu"]="İzin Yok" if st.session_state.df.at[i,"İzin Durumu"]=="İzin Var" else "İzin Var"
+    kaydet() # Anlık Kayıt
+
+def ey(i,t): 
+    st.session_state.df.at[i,t]={"⚪":"✅ Var","✅ Var":"❌ Yok","❌ Yok":"⚪"}.get(st.session_state.df.at[i,t],"⚪")
+    kaydet() # Anlık Kayıt
+
+def msj(i,m): 
+    st.session_state.df.at[i,"Mesaj Durumu"]=m
+    kaydet() # Anlık Kayıt
 
 # --- ARAYÜZ ---
 c1, c2 = st.columns([3,1])
 with c1: st.title("📱 Mobil Takip")
 with c2: 
+    # Yenile butonu verileri sheet'ten tekrar çeker
     if st.button("🔄"): st.cache_data.clear(); st.rerun()
 
 menu = st.selectbox("Menü", ["📋 LİSTE", "📝 TUTANAK", "➕ EKLE", "🗑️ SİL", "🗄️ GEÇMİŞ", "📄 PDF"])
 
 if menu == "📋 LİSTE":
+    
+    st.write("")
+    if st.button("⚪ YENİ YOKLAMA BAŞLAT (Herkesi Sıfırla)", use_container_width=True):
+        sifirla_yeni_yoklama()
+    st.write("")
+
+    # Manuel kaydet butonu yine de dursun, güven verir
     c_kaydet, c_arsiv = st.columns(2)
     with c_kaydet: 
-        if st.button("☁️ KAYDET", type="primary"): kaydet()
+        if st.button("☁️ KAYDET (Manuel)", type="primary"): kaydet(); st.toast("Kaydedildi!")
     with c_arsiv:
         if st.button("🌙 GÜNÜ BİTİR"): arsivle()
         
@@ -240,16 +271,12 @@ if menu == "📋 LİSTE":
     kat_sirasi = ["1. KAT", "2. KAT", "3. KAT", "DİĞER"]
     st.info(f"Toplam: {len(f_df)} Öğrenci")
 
-    # --- KAT DÖNGÜSÜ ---
     for kat in kat_sirasi:
         kat_df = f_df[f_df["_Kat_Grubu"] == kat]
         
         if not kat_df.empty:
-            # --- BURASI DEĞİŞTİ: ST.EXPANDER EKLENDİ ---
-            # Artık katlar birer açılır/kapanır kutu oldu.
             with st.expander(f"🏢 {kat} ({len(kat_df)} Öğrenci)", expanded=False):
                 
-                # İçeride renkli bir başlık da olsun, şık durur
                 renk = KAT_RENKLERI.get(kat, "#eee")
                 st.markdown(f"""<div class="kat-baslik" style="background-color: {renk}; font-weight:bold;">{kat} LİSTESİ</div>""", unsafe_allow_html=True)
 
@@ -258,18 +285,30 @@ if menu == "📋 LİSTE":
                     st.markdown(f"##### 🛏️ Oda {oda}")
                     for i in kat_df[kat_df["Oda No"] == oda].index:
                         r = f_df.loc[i]
-                        ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵"}.get(r['Durum'], "⚪")
+                        
+                        ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵", "Belirsiz": "⚪"}.get(r['Durum'], "⚪")
                         
                         with st.expander(f"{ikon} {r['Ad Soyad']}"):
-                            st.caption("Durum:")
+                            st.caption("Durum Seçiniz:")
+                            
                             secenekler = ["Yurtta", "İzinli", "Evde"]
+                            if r['Durum'] == "Belirsiz":
+                                secenekler.insert(0, "Belirsiz")
+                            
                             try: m_idx = secenekler.index(r['Durum'])
                             except: m_idx = 0
+                            
                             yeni = st.radio("D", secenekler, index=m_idx, key=f"rd{i}", horizontal=True, label_visibility="collapsed")
                             if yeni != r['Durum']:
-                                st.session_state.df.at[i, "Durum"] = yeni; st.session_state.df.at[i, "Mesaj Durumu"] = "-"; st.rerun()
+                                st.session_state.df.at[i, "Durum"] = yeni
+                                st.session_state.df.at[i, "Mesaj Durumu"] = "-"
+                                kaydet() # ANLIK KAYIT!
+                                st.rerun()
                             
-                            if r['Durum'] == "Yurtta":
+                            if r['Durum'] == "Belirsiz":
+                                st.warning("⚠️ Lütfen öğrenci durumunu seçiniz.")
+
+                            elif r['Durum'] == "Yurtta":
                                 st.divider()
                                 c3, c4 = st.columns(2)
                                 with c3:
@@ -330,7 +369,7 @@ elif menu == "➕ EKLE":
             st.divider(); st.caption("Aile Bilgileri")
             b_ad = st.text_input("Baba Adı"); b_tel = st.text_input("Baba Tel"); a_ad = st.text_input("Anne Adı"); a_tel = st.text_input("Anne Tel")
             if st.form_submit_button("Kaydet", type="primary"):
-                y = pd.DataFrame([{"Ad Soyad":ad, "Numara":no, "Oda No":oda, "Durum":"Yurtta", "İzin Durumu":"İzin Var", "Etüd":"⚪", "Yat":"⚪", "Mesaj Durumu":"-", "Baba Adı":b_ad, "Anne Adı":a_ad, "Baba Tel":b_tel, "Anne Tel":a_tel}])
+                y = pd.DataFrame([{"Ad Soyad":ad, "Numara":no, "Oda No":oda, "Durum":"Belirsiz", "İzin Durumu":"İzin Var", "Etüd":"⚪", "Yat":"⚪", "Mesaj Durumu":"-", "Baba Adı":b_ad, "Anne Adı":a_ad, "Baba Tel":b_tel, "Anne Tel":a_tel}])
                 st.session_state.df = pd.concat([st.session_state.df, y], ignore_index=True); kaydet(); st.success("Eklendi")
     with tab2:
         st.info("Gerekli: Ad Soyad, Numara, Oda No, Baba Adı, Anne Adı, Baba Tel, Anne Tel"); st.download_button("📥 Şablon", sablon_indir(), "sablon.xlsx")
@@ -340,7 +379,7 @@ elif menu == "➕ EKLE":
                 ndf = pd.read_excel(f).astype(str)
                 for c in SUTUNLAR: 
                     if c not in ndf.columns: ndf[c] = "-"
-                ndf["Durum"]="Yurtta"; ndf["İzin Durumu"]="İzin Var"; ndf["Etüd"]="⚪"; ndf["Yat"]="⚪"; ndf["Mesaj Durumu"]="-"
+                ndf["Durum"]="Belirsiz"; ndf["İzin Durumu"]="İzin Var"; ndf["Etüd"]="⚪"; ndf["Yat"]="⚪"; ndf["Mesaj Durumu"]="-"
                 ndf = ndf.replace("nan", "-")
                 st.dataframe(ndf.head())
                 if st.button("✅ Yükle", type="primary"):
