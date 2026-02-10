@@ -263,7 +263,161 @@ if menu == "📋 LİSTE":
     st.write("")
 
     c_kaydet, c_arsiv = st.columns(2)
-    with c
+    with c_kaydet: 
+        if st.button("☁️ KAYDET (Manuel)", type="primary"): kaydet(); st.toast("Kaydedildi!")
+    with c_arsiv:
+        if st.button("🌙 GÜNÜ BİTİR"): arsivle()
+        
+    ara = st.text_input("🔍 Ara", placeholder="Öğrenci Adı veya Oda No...")
+    f_df = st.session_state.df
+    if ara: f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(ara, case=False)).any(axis=1)]
 
+    f_df["_Kat_Grubu"] = f_df["Oda No"].apply(kat_bul)
+    kat_sirasi = ["1. KAT", "2. KAT", "3. KAT", "DİĞER"]
+    st.info(f"Toplam: {len(f_df)} Öğrenci")
 
+    for kat in kat_sirasi:
+        kat_df = f_df[f_df["_Kat_Grubu"] == kat]
+        
+        if not kat_df.empty:
+            with st.expander(f"🏢 {kat} ({len(kat_df)} Öğrenci)", expanded=False):
+                
+                renk = KAT_RENKLERI.get(kat, "#eee")
+                st.markdown(f"""<div class="kat-baslik" style="background-color: {renk}; font-weight:bold;">{kat} LİSTESİ</div>""", unsafe_allow_html=True)
 
+                odalar = sorted(kat_df["Oda No"].unique().tolist(), key=str)
+                for oda in odalar:
+                    st.markdown(f"##### 🛏️ Oda {oda}")
+                    for i in kat_df[kat_df["Oda No"] == oda].index:
+                        r = f_df.loc[i]
+                        
+                        ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵", "Belirsiz": "⚪"}.get(r['Durum'], "⚪")
+                        
+                        with st.expander(f"{ikon} {r['Ad Soyad']}"):
+                            st.caption("Durum Seçiniz:")
+                            
+                            secenekler = ["Yurtta", "İzinli", "Evde"]
+                            if r['Durum'] == "Belirsiz":
+                                secenekler.insert(0, "Belirsiz")
+                            
+                            try: m_idx = secenekler.index(r['Durum'])
+                            except: m_idx = 0
+                            
+                            yeni = st.radio("D", secenekler, index=m_idx, key=f"rd{i}", horizontal=True, label_visibility="collapsed")
+                            if yeni != r['Durum']:
+                                st.session_state.df.at[i, "Durum"] = yeni
+                                st.session_state.df.at[i, "Mesaj Durumu"] = "-"
+                                kaydet() 
+                                st.rerun()
+                            
+                            if r['Durum'] == "Belirsiz":
+                                st.warning("⚠️ Lütfen öğrenci durumunu seçiniz.")
+
+                            elif r['Durum'] == "Yurtta":
+                                st.divider()
+                                c3, c4 = st.columns(2)
+                                with c3:
+                                    s = "primary" if "Yok" in str(r['Etüd']) else "secondary"
+                                    if st.button(f"Etüd: {r['Etüd']}", key=f"e{i}", type=s, use_container_width=True): ey(i,"Etüd"); st.rerun()
+                                with c4:
+                                    s = "primary" if "Yok" in str(r['Yat']) else "secondary"
+                                    if st.button(f"Yat: {r['Yat']}", key=f"y{i}", type=s, use_container_width=True): ey(i,"Yat"); st.rerun()
+                                
+                                if "Yok" in str(r['Etüd']) or "Yok" in str(r['Yat']):
+                                    st.warning("⚠️ Yoklamada Yok!")
+                                    msj_txt = f"Öğrenciniz {r['Ad Soyad']} etüd yoklamasına katılmamıştır." if "Yok" in str(r['Etüd']) else f"Öğrenciniz {r['Ad Soyad']} Yat yoklamasında yurtta bulunmamıştır."
+                                    lb = wp(r['Baba Tel'], msj_txt); la = wp(r['Anne Tel'], msj_txt)
+                                    if lb: st.link_button(f"👨 Baba", lb, use_container_width=True, type="primary")
+                                    if la: st.link_button(f"👩 Anne", la, use_container_width=True, type="primary")
+                                    if st.button("✅ Mesaj Atıldı", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
+
+                            elif r['Durum'] == "Evde":
+                                st.write("")
+                                btn = "primary" if r['İzin Durumu']=="İzin Yok" else "secondary"
+                                lbl = "✅ İzinli" if r['İzin Durumu']=="İzin Var" else "⛔ İzinsiz"
+                                if st.button(lbl, key=f"i{i}", type=btn, use_container_width=True): izn(i); st.rerun()
+                                if r['İzin Durumu'] == "İzin Var": st.success("Evci İzinli.")
+                                else:
+                                     st.error("🚨 KAÇAK!")
+                                     msj_txt = f"Öğrenciniz {r['Ad Soyad']} izinsiz olarak yurtta bulunmamaktadır."
+                                     lb = wp(r['Baba Tel'], msj_txt); la = wp(r['Anne Tel'], msj_txt)
+                                     if lb: st.link_button("👨 Baba", lb, use_container_width=True, type="primary")
+                                     if la: st.link_button("👩 Anne", la, use_container_width=True, type="primary")
+                                     if st.button("✅ Ok", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
+
+                            else: 
+                                st.info("Çarşı İzinli")
+                                s_yat = "primary" if "Yok" in str(r['Yat']) else "secondary"
+                                if st.button(f"🛏️ Yat: {r['Yat']}", key=f"iy{i}", type=s_yat, use_container_width=True): ey(i,"Yat"); st.rerun()
+                                if "Yok" in str(r['Yat']):
+                                    st.warning("⚠️ Dönmedi!")
+                                    msj_txt = f"Öğrenciniz {r['Ad Soyad']} izinli olmasına rağmen Yat yoklamasında yurda giriş yapmamıştır."
+                                    lb = wp(r['Baba Tel'], msj_txt); la = wp(r['Anne Tel'], msj_txt)
+                                    if lb: st.link_button("👨 Baba", lb, use_container_width=True, type="primary")
+                                    if la: st.link_button("👩 Anne", la, use_container_width=True, type="primary")
+                                    if st.button("✅ Ok", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
+
+elif menu == "📝 TUTANAK":
+    st.subheader("📝 Günlük Kat Tutanakları")
+    st.session_state.tutanak_1 = st.text_area("1. Kat Tutanağı", st.session_state.tutanak_1, height=100)
+    st.session_state.tutanak_2 = st.text_area("2. Kat Tutanağı", st.session_state.tutanak_2, height=100)
+    st.session_state.tutanak_3 = st.text_area("3. Kat Tutanağı", st.session_state.tutanak_3, height=100)
+    if st.button("💾 Tutanakları Kaydet", type="primary"): st.success("Kaydedildi")
+
+elif menu == "➕ EKLE":
+    st.subheader("Öğrenci Kayıt")
+    tab1, tab2 = st.tabs(["✍️ Tek Tek Ekle", "📂 Excel Yükle"])
+    with tab1:
+        with st.form("ekle_manuel"):
+            ad=st.text_input("Öğrenci Adı Soyadı")
+            c1, c2 = st.columns(2); no=c1.text_input("Okul No"); oda=c2.text_input("Oda No")
+            st.divider(); st.caption("Aile Bilgileri")
+            b_ad = st.text_input("Baba Adı"); b_tel = st.text_input("Baba Tel"); a_ad = st.text_input("Anne Adı"); a_tel = st.text_input("Anne Tel")
+            if st.form_submit_button("Kaydet", type="primary"):
+                y = pd.DataFrame([{"Ad Soyad":ad, "Numara":no, "Oda No":oda, "Durum":"Belirsiz", "İzin Durumu":"İzin Var", "Etüd":"⚪", "Yat":"⚪", "Mesaj Durumu":"-", "Baba Adı":b_ad, "Anne Adı":a_ad, "Baba Tel":b_tel, "Anne Tel":a_tel}])
+                st.session_state.df = pd.concat([st.session_state.df, y], ignore_index=True); kaydet(); st.success("Eklendi")
+    with tab2:
+        st.info("Gerekli: Ad Soyad, Numara, Oda No, Baba Adı, Anne Adı, Baba Tel, Anne Tel"); st.download_button("📥 Şablon", sablon_indir(), "sablon.xlsx")
+        f = st.file_uploader("Excel Seç", type=["xlsx"])
+        if f:
+            try:
+                ndf = pd.read_excel(f).astype(str)
+                for c in SUTUNLAR: 
+                    if c not in ndf.columns: ndf[c] = "-"
+                ndf["Durum"]="Belirsiz"; ndf["İzin Durumu"]="İzin Var"; ndf["Etüd"]="⚪"; ndf["Yat"]="⚪"; ndf["Mesaj Durumu"]="-"
+                ndf = ndf.replace("nan", "-")
+                st.dataframe(ndf.head())
+                if st.button("✅ Yükle", type="primary"):
+                    st.session_state.df = pd.concat([st.session_state.df, ndf], ignore_index=True)
+                    kaydet(); st.success("Yüklendi!"); time.sleep(2); st.rerun()
+            except Exception as e: st.error(f"Hata: {e}")
+
+elif menu == "🗑️ SİL":
+    st.subheader("🗑️ Öğrenci Silme Ekranı")
+    st.warning("⚠️ DİKKAT: Buradan silinen öğrenci kalıcı olarak gider!")
+    ara_sil = st.text_input("Silinecek Öğrenciyi Ara (Ad veya Oda No)")
+    if ara_sil:
+        silinecekler = st.session_state.df[st.session_state.df.astype(str).apply(lambda x: x.str.contains(ara_sil, case=False)).any(axis=1)]
+        if not silinecekler.empty:
+            st.write(f"{len(silinecekler)} sonuç bulundu:")
+            for i in silinecekler.index:
+                r = silinecekler.loc[i]
+                with st.expander(f"❌ {r['Ad Soyad']} - {r['Oda No']}"):
+                    st.write(f"Numara: {r['Numara']}")
+                    st.write(f"Baba: {r['Baba Adı']} - {r['Baba Tel']}")
+                    if st.button("🗑️ BU ÖĞRENCİYİ SİL", key=f"sil_btn_{i}", type="primary"):
+                        st.session_state.df = st.session_state.df.drop(i).reset_index(drop=True)
+                        kaydet()
+                        st.success(f"{r['Ad Soyad']} silindi!"); time.sleep(1); st.rerun()
+        else: st.info("Öğrenci bulunamadı.")
+
+elif menu == "🗄️ GEÇMİŞ":
+    try: d=pd.DataFrame(get_log().get_all_records()); st.dataframe(d[d["Tarih"]==st.selectbox("Tarih", d["Tarih"].unique())], use_container_width=True)
+    except: st.info("Kayıt yok")
+
+elif menu == "📄 PDF":
+    st.subheader("PDF Raporu")
+    c1, c2, c3 = st.columns(3)
+    b1 = c1.text_input("1. Kat Belletmen"); b2 = c2.text_input("2. Kat Belletmen"); b3 = c3.text_input("3. Kat Belletmen")
+    if st.button("PDF Oluştur", type="primary"):
+        st.download_button("⬇️ İndir", pdf_yap(st.session_state.df, b1, b2, b3, st.session_state.tutanak_1, st.session_state.tutanak_2, st.session_state.tutanak_3), "yoklama.pdf", "application/pdf")
