@@ -12,6 +12,7 @@ from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
 from reportlab.lib.utils import simpleSplit
 import os
+import requests  # Font indirmek için gerekli
 from datetime import datetime
 import time
 
@@ -167,41 +168,55 @@ def sifirla_yeni_yoklama():
     time.sleep(1)
     st.rerun()
 
+# --- TÜRKÇE FONT AYARLAMA ---
+def tr_font_getir():
+    font_yolu = "DejaVuSans.ttf"
+    font_adi = "DejaVuSans"
+    
+    # Font dosyası yoksa indir
+    if not os.path.exists(font_yolu):
+        try:
+            # Google Fonts veya GitHub üzerinden güvenilir bir kaynak
+            url = "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf"
+            r = requests.get(url, allow_redirects=True)
+            with open(font_yolu, 'wb') as f:
+                f.write(r.content)
+        except:
+            return "Helvetica" # İndiremezse mecburen eskisine dön
+            
+    pdfmetrics.registerFont(TTFont(font_adi, font_yolu))
+    return font_adi
+
 # --- PDF ---
 def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     b = BytesIO(); c = canvas.Canvas(b, pagesize=A4); w, h = A4
-    try: pdfmetrics.registerFont(TTFont('Arial', 'C:\\Windows\\Fonts\\arial.ttf')); f = 'Arial'
-    except: f = 'Helvetica'
     
-    c.setFont(f, 16); c.drawString(40, h-50, "YURT YOKLAMA LİSTESİ")
-    c.setFont(f, 10); c.drawString(40, h-75, f"Tarih: {datetime.now().strftime('%d.%m.%Y')}")
-    c.setFont(f, 9)
+    # TÜRKÇE FONTU YÜKLE
+    kullanilan_font = tr_font_getir()
+    
+    c.setFont(kullanilan_font, 16); c.drawString(40, h-50, "YURT YOKLAMA LİSTESİ")
+    c.setFont(kullanilan_font, 10); c.drawString(40, h-75, f"Tarih: {datetime.now().strftime('%d.%m.%Y')}")
+    c.setFont(kullanilan_font, 9)
+    
+    # Türkçe karakter sorunu olmasın diye encode gerekebilir ama TTF ile genelde gerekmez
     c.drawRightString(w-40, h-50, f"1. Kat: {b1}"); c.drawRightString(w-40, h-62, f"2. Kat: {b2}"); c.drawRightString(w-40, h-74, f"3. Kat: {b3}")
     c.line(40, h-85, w-40, h-85)
     
     data = [["Ad", "No", "Oda", "Drm", "İzin", "Etüd", "Yat", "Msj"]]
     
-    # PDF verisi hazırlığı (Hata önleyici kopya)
     df_pdf = df.copy()
     df_pdf["Oda No"] = df_pdf["Oda No"].astype(str)
     
     for _, r in df_pdf.sort_values("Oda No").iterrows():
-        # Durum Kısaltması (Hata önleyici)
         durum_str = str(r['Durum'])
-        if durum_str == "Belirsiz" or not durum_str:
-            durum_kisa = "?"
-        else:
-            durum_kisa = durum_str[0]
+        durum_kisa = "?" if (durum_str == "Belirsiz" or not durum_str) else durum_str[0]
 
-        # İzin Kısaltması (Hata önleyici - IndexError Çözümü)
         izin_str = str(r['İzin Durumu'])
-        if r['Durum'] == "Yurtta":
-            izin_kisa = "-"
-        elif not izin_str or len(izin_str) == 0:
-            izin_kisa = "-"
-        else:
-            izin_kisa = izin_str[0]
+        if r['Durum'] == "Yurtta": izin_kisa = "-"
+        elif not izin_str or len(izin_str) == 0: izin_kisa = "-"
+        else: izin_kisa = izin_str[0]
 
+        # Türkçe karakterleri düzeltmek için özel replace gerekmez, TTF halleder.
         data.append([
             str(r['Ad Soyad'])[:15], 
             str(r['Numara']), 
@@ -213,19 +228,25 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
             "OK" if "Atıldı" in str(r['Mesaj Durumu']) else ""
         ])
     
-    t = Table(data, colWidths=[90,30,30,30,30,30,30,40]); t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1),f),('FONTSIZE',(0,0),(-1,-1),8)]))
+    t = Table(data, colWidths=[90,30,30,30,30,30,30,40]); 
+    t.setStyle(TableStyle([
+        ('GRID',(0,0),(-1,-1),0.5,colors.black),
+        ('FONTNAME',(0,0),(-1,-1), kullanilan_font), # Türkçe fontu burada kullandık
+        ('FONTSIZE',(0,0),(-1,-1),8)
+    ]))
     t.wrapOn(c, w, h); t.drawOn(c, 40, h-(110+len(data)*20))
     
     c.showPage()
-    c.setFont(f, 16); c.drawString(40, h-50, "GÜNLÜK KAT TUTANAKLARI")
+    # 2. Sayfa Fontu
+    c.setFont(kullanilan_font, 16); c.drawString(40, h-50, "GÜNLÜK KAT TUTANAKLARI")
     c.line(40, h-60, w-40, h-60)
     
     y_pos = h - 100
     def yazdir_tutanak(baslik, metin, y):
-        c.setFont(f, 12); c.setFillColor(colors.darkblue); c.drawString(40, y, baslik)
+        c.setFont(kullanilan_font, 12); c.setFillColor(colors.darkblue); c.drawString(40, y, baslik)
         y -= 20
-        c.setFont(f, 10); c.setFillColor(colors.black)
-        lines = simpleSplit(metin, f, 10, w-80)
+        c.setFont(kullanilan_font, 10); c.setFillColor(colors.black)
+        lines = simpleSplit(metin, kullanilan_font, 10, w-80)
         for line in lines: c.drawString(40, y, line); y -= 15
         return y - 30
 
