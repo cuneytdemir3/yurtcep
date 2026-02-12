@@ -167,23 +167,34 @@ def kat_bul(oda_no):
         else: return "DİĞER"
     except: return "DİĞER"
 
-# --- FONT ---
+# --- SAĞLAM FONT YÖNETİCİSİ ---
 def tr_font_getir():
-    font_yolu = "DejaVuSans.ttf"; font_adi = "DejaVuSans"
-    if not os.path.exists(font_yolu):
+    font_yolu = "DejaVuSans.ttf"
+    font_adi = "DejaVuSans"
+    
+    # 1. Dosya yoksa veya bozuksa (boyutu küçükse) indir
+    if not os.path.exists(font_yolu) or os.path.getsize(font_yolu) < 100000:
         try:
-            r = requests.get("https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf", timeout=5)
-            if r.status_code==200: 
+            url = "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf"
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
                 with open(font_yolu, 'wb') as f: f.write(r.content)
-            else: return "Helvetica"
-        except: return "Helvetica"
-    try: pdfmetrics.registerFont(TTFont(font_adi, font_yolu)); return font_adi
-    except: 
+            else:
+                return "Helvetica"
+        except:
+            return "Helvetica"
+
+    # 2. Fontu sisteme kaydet
+    try:
+        pdfmetrics.registerFont(TTFont(font_adi, font_yolu))
+        return font_adi
+    except:
+        # Hata verirse (bozuk dosya vs.) sil ve standarda dön
         try: os.remove(font_yolu)
         except: pass
         return "Helvetica"
 
-# --- PDF OLUŞTURUCU (GÜNCELLENDİ: No Sütunu Kaldırıldı) ---
+# --- PDF OLUŞTURUCU (No Yok, Türkçe Var) ---
 def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     b = BytesIO(); c = canvas.Canvas(b, pagesize=A4); w, h = A4
     font = tr_font_getir()
@@ -209,7 +220,7 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     if b3: c.drawRightString(w-40, h-y_h, f"3. Kat: {b3}")
     c.line(40, h-90, w-40, h-90)
     
-    # --- TABLO BAŞLIKLARI (No Kaldırıldı) ---
+    # Tablo Başlıkları (No Yok)
     data = [["Ad Soyad", "Oda", "Drm", "İzin", "Etüd", "Yat", "Msj"]]
     
     for _, r in df_pdf.sort_values("Oda No").iterrows():
@@ -219,9 +230,8 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
         elif not izn_str or len(izn_str)==0: i_kisa="-"
         else: i_kisa = izn_str[0]
 
-        # --- TABLO VERİSİ (Numara Sütunu Kaldırıldı, İsim Uzatıldı) ---
         data.append([
-            str(r['Ad Soyad'])[:22], # İsim alanı genişledi (22 karakter)
+            str(r['Ad Soyad'])[:22], # İsim alanı geniş
             str(r['Oda No']), 
             d_kisa, i_kisa, 
             str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), 
@@ -229,7 +239,6 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
             "OK" if "Atıldı" in str(r['Mesaj Durumu']) else ""
         ])
     
-    # --- TABLO GENİŞLİKLERİ (No silindi, Ad Soyad 120px oldu) ---
     t = Table(data, colWidths=[120, 30, 30, 30, 30, 30, 40]); 
     t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1),font),('FONTSIZE',(0,0),(-1,-1),8)]))
     t.wrapOn(c, w, h); t.drawOn(c, 40, h-(110+len(data)*20))
@@ -240,7 +249,7 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     def yazdir_tutanak(baslik, metin, y):
         c.setFont(font, 12); c.setFillColor(colors.darkblue); c.drawString(40, y, baslik); y-=20
         c.setFont(font, 10); c.setFillColor(colors.black)
-        for line in simpleSplit(metin, font, 10, w-80): c.drawString(40, y, line); y-=15
+        for line in simpleSplit(metin, font, 10, w-80): c.drawString(40, y, line); y -= 15
         return y-30
 
     if b1: y_pos = yazdir_tutanak(f"1. KAT TUTANAĞI ({b1})", t1, y_pos)
