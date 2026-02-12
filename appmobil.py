@@ -167,40 +167,50 @@ def kat_bul(oda_no):
         else: return "DİĞER"
     except: return "DİĞER"
 
-# --- TÜRKÇE FONT YÖNETİCİSİ (ROBOTO) ---
+# --- GELİŞMİŞ FONT YÖNETİCİSİ (GARANTİLİ) ---
 def tr_font_getir():
     font_adi = "Roboto"
     font_yolu = "Roboto-Regular.ttf"
     
-    # 1. Font sistemde kayıtlı mı?
+    # 1. Font zaten kayıtlı mı?
     if font_adi in pdfmetrics.getRegisteredFontNames():
         return font_adi
 
-    # 2. Font dosyası var mı ve boyutu geçerli mi? (>10KB olmalı)
+    # 2. Dosya yoksa veya bozuksa (10KB'dan küçükse) indir
     if not os.path.exists(font_yolu) or os.path.getsize(font_yolu) < 10000:
         try:
-            # Google Fonts'tan Roboto indir (Daha stabil)
+            # Google Fonts'tan çek (En sağlam kaynak)
             url = "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf"
             r = requests.get(url, timeout=10)
             if r.status_code == 200:
                 with open(font_yolu, 'wb') as f:
                     f.write(r.content)
             else:
-                return "Helvetica" # İndirme başarısızsa standarda dön
+                # İndirme başarısızsa ve Windows'taysak Arial dene
+                if os.name == 'nt': 
+                    try: 
+                        pdfmetrics.registerFont(TTFont('Arial', 'Arial.ttf'))
+                        return 'Arial'
+                    except: pass
+                return "Helvetica" # Mecburiyetten
         except:
+            if os.name == 'nt':
+                try: 
+                    pdfmetrics.registerFont(TTFont('Arial', 'Arial.ttf'))
+                    return 'Arial'
+                except: pass
             return "Helvetica"
 
-    # 3. Fontu kaydetmeyi dene
+    # 3. Dosyayı Kaydet
     try:
         pdfmetrics.registerFont(TTFont(font_adi, font_yolu))
         return font_adi
     except:
-        # Dosya bozuksa sil ve standarda dön
-        try: os.remove(font_yolu)
+        try: os.remove(font_yolu) # Bozuksa sil
         except: pass
         return "Helvetica"
 
-# --- PDF OLUŞTURUCU (No Yok, Türkçe Var) ---
+# --- PDF OLUŞTURUCU ---
 def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     b = BytesIO(); c = canvas.Canvas(b, pagesize=A4); w, h = A4
     font = tr_font_getir() # Fontu al
@@ -423,4 +433,3 @@ elif menu == "📄 PDF":
     b3 = c3.text_input("3. Kat Belletmen")
     if st.button("PDF Oluştur", type="primary"):
         st.download_button("⬇️ İndir", pdf_yap(st.session_state.df, b1, b2, b3, st.session_state.tutanak_1, st.session_state.tutanak_2, st.session_state.tutanak_3), "yoklama.pdf", "application/pdf")
-
