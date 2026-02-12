@@ -167,54 +167,56 @@ def kat_bul(oda_no):
         else: return "DİĞER"
     except: return "DİĞER"
 
-# --- GELİŞMİŞ FONT YÖNETİCİSİ (GARANTİLİ) ---
+# --- TÜRKÇE FONT YÖNETİCİSİ (KESİN ÇÖZÜM) ---
 def tr_font_getir():
-    font_adi = "Roboto"
-    font_yolu = "Roboto-Regular.ttf"
+    font_adi = "DejaVuSans"
+    font_yolu = "DejaVuSans.ttf"
     
-    # 1. Font zaten kayıtlı mı?
+    # 1. Zaten yüklüyse adını dön
     if font_adi in pdfmetrics.getRegisteredFontNames():
         return font_adi
 
-    # 2. Dosya yoksa veya bozuksa (10KB'dan küçükse) indir
+    # 2. Dosya yoksa veya bozuksa İNDİR (ZORLA)
     if not os.path.exists(font_yolu) or os.path.getsize(font_yolu) < 10000:
-        try:
-            # Google Fonts'tan çek (En sağlam kaynak)
-            url = "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf"
-            r = requests.get(url, timeout=10)
-            if r.status_code == 200:
-                with open(font_yolu, 'wb') as f:
-                    f.write(r.content)
-            else:
-                # İndirme başarısızsa ve Windows'taysak Arial dene
-                if os.name == 'nt': 
-                    try: 
-                        pdfmetrics.registerFont(TTFont('Arial', 'Arial.ttf'))
-                        return 'Arial'
-                    except: pass
-                return "Helvetica" # Mecburiyetten
-        except:
-            if os.name == 'nt':
-                try: 
-                    pdfmetrics.registerFont(TTFont('Arial', 'Arial.ttf'))
-                    return 'Arial'
-                except: pass
-            return "Helvetica"
+        with st.spinner("Türkçe Font İndiriliyor... Lütfen Bekleyiniz..."):
+            try:
+                # GitHub Raw Linki - En Kararlı Link
+                url = "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf"
+                r = requests.get(url, timeout=15)
+                if r.status_code == 200:
+                    with open(font_yolu, 'wb') as f:
+                        f.write(r.content)
+                else:
+                    st.error("Font indirilemedi! İnternet bağlantısını kontrol edin.")
+                    return "Helvetica" # Mecburiyetten
+            except Exception as e:
+                st.error(f"Font Hatası: {e}")
+                return "Helvetica"
 
     # 3. Dosyayı Kaydet
     try:
         pdfmetrics.registerFont(TTFont(font_adi, font_yolu))
         return font_adi
-    except:
-        try: os.remove(font_yolu) # Bozuksa sil
-        except: pass
+    except Exception as e:
+        # Dosya bozuksa sil ve Helvetica'ya dön (Uygulama çökmesin)
+        if os.path.exists(font_yolu): os.remove(font_yolu)
+        st.error(f"Font Yükleme Hatası: {e}. Standart font kullanılacak.")
         return "Helvetica"
+
+# --- TÜRKÇE BÜYÜTME FONKSİYONU ---
+def tr_upper(text):
+    if not text: return ""
+    # i -> İ dönüşümünü manuel yap
+    return text.replace("i", "İ").upper()
 
 # --- PDF OLUŞTURUCU ---
 def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     b = BytesIO(); c = canvas.Canvas(b, pagesize=A4); w, h = A4
-    font = tr_font_getir() # Fontu al
     
+    # Fontu Yükle
+    kullanilan_font = tr_font_getir()
+    
+    # KAT FİLTRELEME
     secili_katlar = []
     if b1: secili_katlar.append("1. KAT")
     if b2: secili_katlar.append("2. KAT")
@@ -226,17 +228,23 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     df_pdf["_KAT"] = df_pdf["Oda No"].apply(kat_bul)
     df_pdf = df_pdf[df_pdf["_KAT"].isin(secili_katlar)]
 
-    # Başlık
-    c.setFont(font, 16); c.drawString(40, h-50, "YURT YOKLAMA LİSTESİ")
-    c.setFont(font, 10); c.drawString(40, h-75, f"Tarih: {datetime.now().strftime('%d.%m.%Y')}")
-    c.setFont(font, 9)
+    # --- BAŞLIK ---
+    c.setFont(kullanilan_font, 16)
+    c.drawString(40, h-50, "YURT YOKLAMA LİSTESİ")
+    
+    c.setFont(kullanilan_font, 10)
+    c.drawString(40, h-75, f"Tarih: {datetime.now().strftime('%d.%m.%Y')}")
+    
+    c.setFont(kullanilan_font, 9)
     y_h = 50
-    if b1: c.drawRightString(w-40, h-y_h, f"1. Kat: {b1}"); y_h+=12
-    if b2: c.drawRightString(w-40, h-y_h, f"2. Kat: {b2}"); y_h+=12
-    if b3: c.drawRightString(w-40, h-y_h, f"3. Kat: {b3}")
+    # Belletmen isimlerini Türkçe karakter düzeltmesiyle yaz
+    if b1: c.drawRightString(w-40, h-y_h, f"1. Kat: {tr_upper(b1)}"); y_h+=12
+    if b2: c.drawRightString(w-40, h-y_h, f"2. Kat: {tr_upper(b2)}"); y_h+=12
+    if b3: c.drawRightString(w-40, h-y_h, f"3. Kat: {tr_upper(b3)}")
+    
     c.line(40, h-90, w-40, h-90)
     
-    # Tablo Başlıkları
+    # --- TABLO ---
     data = [["Ad Soyad", "Oda", "Drm", "İzin", "Etüd", "Yat", "Msj"]]
     
     for _, r in df_pdf.sort_values("Oda No").iterrows():
@@ -247,7 +255,7 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
         else: i_kisa = izn_str[0]
 
         data.append([
-            str(r['Ad Soyad'])[:22],
+            str(r['Ad Soyad'])[:22], # İsim
             str(r['Oda No']), 
             d_kisa, i_kisa, 
             str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), 
@@ -256,21 +264,26 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
         ])
     
     t = Table(data, colWidths=[120, 30, 30, 30, 30, 30, 40]); 
-    t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1),font),('FONTSIZE',(0,0),(-1,-1),8)]))
+    t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1), kullanilan_font),('FONTSIZE',(0,0),(-1,-1),8)]))
     t.wrapOn(c, w, h); t.drawOn(c, 40, h-(110+len(data)*20))
     
-    # Tutanaklar
-    c.showPage(); c.setFont(font, 16); c.drawString(40, h-50, "GÜNLÜK KAT TUTANAKLARI"); c.line(40, h-60, w-40, h-60)
+    # --- TUTANAKLAR ---
+    c.showPage(); c.setFont(kullanilan_font, 16)
+    c.drawString(40, h-50, tr_upper("GÜNLÜK KAT TUTANAKLARI"))
+    c.line(40, h-60, w-40, h-60)
+    
     y_pos = h-100
     def yazdir_tutanak(baslik, metin, y):
-        c.setFont(font, 12); c.setFillColor(colors.darkblue); c.drawString(40, y, baslik); y-=20
-        c.setFont(font, 10); c.setFillColor(colors.black)
-        for line in simpleSplit(metin, font, 10, w-80): c.drawString(40, y, line); y -= 15
+        c.setFont(kullanilan_font, 12); c.setFillColor(colors.darkblue); c.drawString(40, y, baslik); y-=20
+        c.setFont(kullanilan_font, 10); c.setFillColor(colors.black)
+        for line in simpleSplit(metin, kullanilan_font, 10, w-80): c.drawString(40, y, line); y -= 15
         return y-30
 
-    if b1: y_pos = yazdir_tutanak(f"1. KAT TUTANAĞI ({b1})", t1, y_pos)
-    if b2: y_pos = yazdir_tutanak(f"2. KAT TUTANAĞI ({b2})", t2, y_pos)
-    if b3: y_pos = yazdir_tutanak(f"3. KAT TUTANAĞI ({b3})", t3, y_pos)
+    # Tutanak Başlıklarını Türkçe Karakter Destekli Yaz
+    if b1: y_pos = yazdir_tutanak(f"1. KAT TUTANAĞI ({tr_upper(b1)})", t1, y_pos)
+    if b2: y_pos = yazdir_tutanak(f"2. KAT TUTANAĞI ({tr_upper(b2)})", t2, y_pos)
+    if b3: y_pos = yazdir_tutanak(f"3. KAT TUTANAĞI ({tr_upper(b3)})", t3, y_pos)
+    
     c.save(); b.seek(0); return b
 
 def wp(tel, m):
