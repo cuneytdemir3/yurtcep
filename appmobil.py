@@ -141,14 +141,12 @@ if "df" not in st.session_state:
         for c in SUTUNLAR:
             if c not in st.session_state.df.columns: st.session_state.df[c] = "-"
         
-        # HATA DÜZELTME: Tüm verileri string (metin) yapalım ki karışıklık çıkmasın
         st.session_state.df = st.session_state.df.fillna("-").astype(str)
         
     except Exception as e: st.error(f"Veri Hatası: {e}"); st.stop()
 
 def kaydet():
     try: 
-        # Kaydederken de hepsini string'e çeviriyoruz
         get_sheet().update([st.session_state.df.columns.tolist()] + st.session_state.df.astype(str).values.tolist())
     except: 
         st.error("Bağlantı Hatası! Kaydedilemedi.")
@@ -183,14 +181,37 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     
     data = [["Ad", "No", "Oda", "Drm", "İzin", "Etüd", "Yat", "Msj"]]
     
-    # --- HATA DÜZELTME NOKTASI ---
-    # Sıralama yapmadan önce Oda No sütununu kesinlikle String yapıyoruz.
+    # PDF verisi hazırlığı (Hata önleyici kopya)
     df_pdf = df.copy()
     df_pdf["Oda No"] = df_pdf["Oda No"].astype(str)
     
     for _, r in df_pdf.sort_values("Oda No").iterrows():
-        durum_kisa = r['Durum'][0] if r['Durum'] != "Belirsiz" else "?"
-        data.append([str(r['Ad Soyad'])[:15], str(r['Numara']), str(r['Oda No']), durum_kisa, "-" if r['Durum']=="Yurtta" else str(r['İzin Durumu'])[0], str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), str(r['Yat']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), "OK" if "Atıldı" in str(r['Mesaj Durumu']) else ""])
+        # Durum Kısaltması (Hata önleyici)
+        durum_str = str(r['Durum'])
+        if durum_str == "Belirsiz" or not durum_str:
+            durum_kisa = "?"
+        else:
+            durum_kisa = durum_str[0]
+
+        # İzin Kısaltması (Hata önleyici - IndexError Çözümü)
+        izin_str = str(r['İzin Durumu'])
+        if r['Durum'] == "Yurtta":
+            izin_kisa = "-"
+        elif not izin_str or len(izin_str) == 0:
+            izin_kisa = "-"
+        else:
+            izin_kisa = izin_str[0]
+
+        data.append([
+            str(r['Ad Soyad'])[:15], 
+            str(r['Numara']), 
+            str(r['Oda No']), 
+            durum_kisa, 
+            izin_kisa, 
+            str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), 
+            str(r['Yat']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), 
+            "OK" if "Atıldı" in str(r['Mesaj Durumu']) else ""
+        ])
     
     t = Table(data, colWidths=[90,30,30,30,30,30,30,40]); t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1),f),('FONTSIZE',(0,0),(-1,-1),8)]))
     t.wrapOn(c, w, h); t.drawOn(c, 40, h-(110+len(data)*20))
