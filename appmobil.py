@@ -168,37 +168,55 @@ def kat_bul(oda_no):
         else: return "DİĞER"
     except: return "DİĞER"
 
-# --- TÜRKÇE FONT ---
+# --- GÜVENLİ FONT YÖNETİCİSİ (HATA GİDERİCİ) ---
 def tr_font_getir():
-    font_yolu = "DejaVuSans.ttf"; font_adi = "DejaVuSans"
+    font_yolu = "DejaVuSans.ttf"
+    font_adi = "DejaVuSans"
+    
+    # 1. Font dosyasını indirmeyi dene
     if not os.path.exists(font_yolu):
         try:
-            r = requests.get("https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf", allow_redirects=True)
-            with open(font_yolu, 'wb') as f: f.write(r.content)
-        except: return "Helvetica"
-    pdfmetrics.registerFont(TTFont(font_adi, font_yolu)); return font_adi
+            url = "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf"
+            r = requests.get(url, timeout=5)
+            if r.status_code == 200:
+                with open(font_yolu, 'wb') as f:
+                    f.write(r.content)
+            else:
+                return "Helvetica" # İndirme başarısızsa standarda dön
+        except:
+            return "Helvetica"
 
-# --- AKILLI PDF OLUŞTURUCU (GÜNCELLENDİ) ---
+    # 2. Fontu kaydetmeyi dene (Hata verirse dosyayı sil ve standarda dön)
+    try:
+        pdfmetrics.registerFont(TTFont(font_adi, font_yolu))
+        return font_adi
+    except Exception:
+        # Font bozuksa sil ki bir dahaki sefere tekrar indirmeyi denesin
+        try: os.remove(font_yolu)
+        except: pass
+        return "Helvetica"
+
+# --- AKILLI PDF OLUŞTURUCU ---
 def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     b = BytesIO(); c = canvas.Canvas(b, pagesize=A4); w, h = A4
+    
+    # Fontu güvenli şekilde al
     kullanilan_font = tr_font_getir()
     
-    # 1. HANGİ KATLAR SEÇİLİ? (Filtreleme Mantığı)
+    # 1. KAT FİLTRELEME
     secili_katlar = []
     if b1: secili_katlar.append("1. KAT")
     if b2: secili_katlar.append("2. KAT")
     if b3: secili_katlar.append("3. KAT")
     
-    # Eğer hiç isim girilmemişse HEPSİNİ göster (Güvenlik)
     if not secili_katlar:
         secili_katlar = ["1. KAT", "2. KAT", "3. KAT", "DİĞER"]
 
-    # 2. VERİLERİ FİLTRELE
+    # 2. VERİ HAZIRLIĞI
     df_pdf = df.copy()
     df_pdf["Oda No"] = df_pdf["Oda No"].astype(str)
-    df_pdf["_KAT"] = df_pdf["Oda No"].apply(kat_bul) # Kat sütunu ekle
+    df_pdf["_KAT"] = df_pdf["Oda No"].apply(kat_bul)
     
-    # Sadece seçili katların verisini al
     df_pdf = df_pdf[df_pdf["_KAT"].isin(secili_katlar)]
 
     # 3. PDF BAŞLIK
@@ -206,7 +224,6 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     c.setFont(kullanilan_font, 10); c.drawString(40, h-75, f"Tarih: {datetime.now().strftime('%d.%m.%Y')}")
     c.setFont(kullanilan_font, 9)
     
-    # Sadece adı yazılan belletmenleri başlığa koy
     y_header = 50
     if b1: c.drawRightString(w-40, h-y_header, f"1. Kat: {b1}"); y_header += 12
     if b2: c.drawRightString(w-40, h-y_header, f"2. Kat: {b2}"); y_header += 12
@@ -214,7 +231,7 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     
     c.line(40, h-90, w-40, h-90)
     
-    # 4. TABLOYU OLUŞTUR
+    # 4. TABLO
     data = [["Ad", "No", "Oda", "Drm", "İzin", "Etüd", "Yat", "Msj"]]
     
     for _, r in df_pdf.sort_values("Oda No").iterrows():
@@ -237,7 +254,7 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1), kullanilan_font),('FONTSIZE',(0,0),(-1,-1),8)]))
     t.wrapOn(c, w, h); t.drawOn(c, 40, h-(110+len(data)*20))
     
-    # 5. TUTANAK SAYFASI (Sadece Seçili Katlar)
+    # 5. TUTANAKLAR
     c.showPage()
     c.setFont(kullanilan_font, 16); c.drawString(40, h-50, "GÜNLÜK KAT TUTANAKLARI")
     c.line(40, h-60, w-40, h-60)
@@ -251,7 +268,6 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
         for line in lines: c.drawString(40, y, line); y -= 15
         return y - 30
 
-    # Sadece ismi girilen katların tutanaklarını yazdır
     if b1: y_pos = yazdir_tutanak(f"1. KAT TUTANAĞI ({b1})", t1, y_pos)
     if b2: y_pos = yazdir_tutanak(f"2. KAT TUTANAĞI ({b2})", t2, y_pos)
     if b3: y_pos = yazdir_tutanak(f"3. KAT TUTANAĞI ({b3})", t3, y_pos)
@@ -418,4 +434,3 @@ elif menu == "📄 PDF":
     b3 = c3.text_input("3. Kat Belletmen")
     if st.button("PDF Oluştur", type="primary"):
         st.download_button("⬇️ İndir", pdf_yap(st.session_state.df, b1, b2, b3, st.session_state.tutanak_1, st.session_state.tutanak_2, st.session_state.tutanak_3), "yoklama.pdf", "application/pdf")
-
