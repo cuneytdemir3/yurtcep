@@ -167,29 +167,35 @@ def kat_bul(oda_no):
         else: return "DİĞER"
     except: return "DİĞER"
 
-# --- SAĞLAM FONT YÖNETİCİSİ ---
+# --- TÜRKÇE FONT YÖNETİCİSİ (ROBOTO) ---
 def tr_font_getir():
-    font_yolu = "DejaVuSans.ttf"
-    font_adi = "DejaVuSans"
+    font_adi = "Roboto"
+    font_yolu = "Roboto-Regular.ttf"
     
-    # 1. Dosya yoksa veya bozuksa (boyutu küçükse) indir
-    if not os.path.exists(font_yolu) or os.path.getsize(font_yolu) < 100000:
+    # 1. Font sistemde kayıtlı mı?
+    if font_adi in pdfmetrics.getRegisteredFontNames():
+        return font_adi
+
+    # 2. Font dosyası var mı ve boyutu geçerli mi? (>10KB olmalı)
+    if not os.path.exists(font_yolu) or os.path.getsize(font_yolu) < 10000:
         try:
-            url = "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf"
+            # Google Fonts'tan Roboto indir (Daha stabil)
+            url = "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf"
             r = requests.get(url, timeout=10)
             if r.status_code == 200:
-                with open(font_yolu, 'wb') as f: f.write(r.content)
+                with open(font_yolu, 'wb') as f:
+                    f.write(r.content)
             else:
-                return "Helvetica"
+                return "Helvetica" # İndirme başarısızsa standarda dön
         except:
             return "Helvetica"
 
-    # 2. Fontu sisteme kaydet
+    # 3. Fontu kaydetmeyi dene
     try:
         pdfmetrics.registerFont(TTFont(font_adi, font_yolu))
         return font_adi
     except:
-        # Hata verirse (bozuk dosya vs.) sil ve standarda dön
+        # Dosya bozuksa sil ve standarda dön
         try: os.remove(font_yolu)
         except: pass
         return "Helvetica"
@@ -197,7 +203,7 @@ def tr_font_getir():
 # --- PDF OLUŞTURUCU (No Yok, Türkçe Var) ---
 def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     b = BytesIO(); c = canvas.Canvas(b, pagesize=A4); w, h = A4
-    font = tr_font_getir()
+    font = tr_font_getir() # Fontu al
     
     secili_katlar = []
     if b1: secili_katlar.append("1. KAT")
@@ -220,7 +226,7 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     if b3: c.drawRightString(w-40, h-y_h, f"3. Kat: {b3}")
     c.line(40, h-90, w-40, h-90)
     
-    # Tablo Başlıkları (No Yok)
+    # Tablo Başlıkları
     data = [["Ad Soyad", "Oda", "Drm", "İzin", "Etüd", "Yat", "Msj"]]
     
     for _, r in df_pdf.sort_values("Oda No").iterrows():
@@ -231,7 +237,7 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
         else: i_kisa = izn_str[0]
 
         data.append([
-            str(r['Ad Soyad'])[:22], # İsim alanı geniş
+            str(r['Ad Soyad'])[:22],
             str(r['Oda No']), 
             d_kisa, i_kisa, 
             str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), 
