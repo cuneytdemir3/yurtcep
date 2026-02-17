@@ -17,7 +17,7 @@ from datetime import datetime
 import time
 import warnings
 
-# SSL uyarılarını gizle
+# SSL uyarılarını ve gereksiz hataları gizle
 warnings.filterwarnings("ignore")
 
 # --- MOBİL AYARLAR ---
@@ -119,17 +119,25 @@ def get_client():
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
         return gspread.authorize(creds)
     except Exception as e:
-        st.error("🚨 Bağlantı Hatası! Secrets ayarlarını yaptın mı?")
-        st.stop()
+        # Hata olsa bile uygulamayı durdurma, uyarı ver
+        st.error("🚨 Sunucu Bağlantı Hatası! İnternetinizi kontrol edin.")
+        return None
 
-def get_sheet(): return get_client().open_by_url(SHEET_LINKI).sheet1
+def get_sheet(): 
+    c = get_client()
+    if c: return c.open_by_url(SHEET_LINKI).sheet1
+    return None
+
 def get_log():
-    c = get_client(); s = c.open_by_url(SHEET_LINKI)
-    try: return s.worksheet("GECMIS")
-    except: 
-        ws = s.add_worksheet("GECMIS", 1000, 12)
-        ws.append_row(["Tarih", "Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Yat", "Mesaj Durumu", "Baba Adı", "Anne Adı", "Baba Tel", "Anne Tel"])
-        return ws
+    c = get_client()
+    if c:
+        s = c.open_by_url(SHEET_LINKI)
+        try: return s.worksheet("GECMIS")
+        except: 
+            ws = s.add_worksheet("GECMIS", 1000, 12)
+            ws.append_row(["Tarih", "Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Yat", "Mesaj Durumu", "Baba Adı", "Anne Adı", "Baba Tel", "Anne Tel"])
+            return ws
+    return None
 
 # --- VERİ YÖNETİMİ ---
 SUTUNLAR = ["Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Yat", "Mesaj Durumu", "Baba Adı", "Anne Adı", "Baba Tel", "Anne Tel"]
@@ -138,29 +146,52 @@ if "tutanak_1" not in st.session_state: st.session_state.tutanak_1 = "Olumsuz bi
 if "tutanak_2" not in st.session_state: st.session_state.tutanak_2 = "Olumsuz bir durum yoktur."
 if "tutanak_3" not in st.session_state: st.session_state.tutanak_3 = "Olumsuz bir durum yoktur."
 
+# Verileri Çekme (Hata Korumalı)
 if "df" not in st.session_state:
     try:
-        d = get_sheet().get_all_records()
-        st.session_state.df = pd.DataFrame(d) if d else pd.DataFrame(columns=SUTUNLAR)
-        for c in SUTUNLAR:
-            if c not in st.session_state.df.columns: st.session_state.df[c] = "-"
-        st.session_state.df = st.session_state.df.fillna("-").astype(str)
-    except Exception as e: st.error(f"Veri Hatası: {e}"); st.stop()
+        s = get_sheet()
+        if s:
+            d = s.get_all_records()
+            st.session_state.df = pd.DataFrame(d) if d else pd.DataFrame(columns=SUTUNLAR)
+            for c in SUTUNLAR:
+                if c not in st.session_state.df.columns: st.session_state.df[c] = "-"
+            st.session_state.df = st.session_state.df.fillna("-").astype(str)
+        else:
+            st.warning("Veriler çekilemedi. Tekrar deneyin.")
+            st.session_state.df = pd.DataFrame(columns=SUTUNLAR)
+    except Exception as e: 
+        st.error(f"Veri Yükleme Hatası: {e}")
+        st.stop()
 
+# --- GÜVENLİ KAYDETME FONKSİYONU ---
 def kaydet():
     try: 
-        get_sheet().update([st.session_state.df.columns.tolist()] + st.session_state.df.astype(str).values.tolist())
-    except: st.error("Bağlantı Hatası! Kaydedilemedi.")
+        s = get_sheet()
+        if s:
+            s.update([st.session_state.df.columns.tolist()] + st.session_state.df.astype(str).values.tolist())
+        else:
+            st.warning("⚠️ İnternet hatası: Kayıt Google'a gönderilemedi. Lütfen sayfayı yenilemeden tekrar deneyin.")
+    except Exception as e: 
+        st.warning(f"⚠️ Kayıt Hatası (API Limiti Dolmuş Olabilir): {e}. Lütfen 5 saniye bekleyip tekrar deneyin.")
 
 def arsivle():
     try:
         t = datetime.now().strftime("%d.%m.%Y"); d = st.session_state.df.copy(); d.insert(0, "Tarih", t)
-        get_log().append_rows(d.astype(str).values.tolist()); st.success(f"✅ {t} Arşivlendi!"); st.balloons()
+        l = get_log()
+        if l:
+            l.append_rows(d.astype(str).values.tolist()); st.success(f"✅ {t} Arşivlendi!"); st.balloons()
     except: st.error("Arşiv Hatası")
 
 def sifirla_yeni_yoklama():
-    st.session_state.df["Durum"] = "Belirsiz"; st.session_state.df["Etüd"] = "⚪"; st.session_state.df["Yat"] = "⚪"; st.session_state.df["Mesaj Durumu"] = "-"
-    kaydet(); st.success("Sıfırlandı!"); time.sleep(1); st.rerun()
+    # Sadece verileri güncelle, yapıyı bozma
+    st.session_state.df["Durum"] = "Belirsiz"
+    st.session_state.df["Etüd"] = "⚪"
+    st.session_state.df["Yat"] = "⚪"
+    st.session_state.df["Mesaj Durumu"] = "-"
+    kaydet()
+    st.success("Tüm liste sıfırlandı! Yeni güne başlandı.")
+    time.sleep(1)
+    st.rerun()
 
 def kat_bul(oda_no):
     try:
@@ -259,18 +290,33 @@ def msj(i,m): st.session_state.df.at[i,"Mesaj Durumu"]=m; kaydet()
 c1, c2 = st.columns([3,1])
 with c1: st.title("📱 Mobil Takip")
 with c2: 
-    if st.button("🔄"): st.cache_data.clear(); st.rerun()
+    # Sadece cache'i silmek yerine komple yenileme yapalım
+    if st.button("🔄"): 
+        st.cache_data.clear()
+        st.rerun()
 
 menu = st.selectbox("Menü", ["📋 LİSTE", "📝 TUTANAK", "➕ EKLE", "🗑️ SİL", "🗄️ GEÇMİŞ", "📄 PDF"])
 
 if menu == "📋 LİSTE":
-    st.write(""); 
-    if st.button("⚪ YENİ YOKLAMA BAŞLAT (Herkesi Sıfırla)", use_container_width=True): sifirla_yeni_yoklama()
-    st.write("")
     
+    # --- GÜVENLİ SIFIRLAMA BUTONU ---
+    with st.expander("⚠️ YENİ GÜN BAŞLAT (Dikkat)"):
+        st.warning("Bu butona basarsanız TÜM KATLARDAKİ veriler sıfırlanır.")
+        sifirla_kilit = st.checkbox("Evet, tüm listeyi silmek ve yeni gün başlatmak istiyorum.")
+        if sifirla_kilit:
+            if st.button("🔴 SIFIRLA VE BAŞLAT", type="primary", use_container_width=True):
+                sifirla_yeni_yoklama()
+    
+    st.write("---")
+    
+    # Diğer belletmenlerin verisini çekmek için buton
+    if st.button("⬇️ VERİLERİ GÜNCELLE / SENKRONİZE ET", type="secondary", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+
     c_kaydet, c_arsiv = st.columns(2)
     with c_kaydet: 
-        if st.button("☁️ KAYDET (Manuel)", type="primary"): kaydet(); st.toast("Kaydedildi!")
+        if st.button("☁️ KAYDET", type="primary"): kaydet(); st.toast("Kaydedildi!")
     with c_arsiv:
         if st.button("🌙 GÜNÜ BİTİR"): arsivle()
         
@@ -294,15 +340,10 @@ if menu == "📋 LİSTE":
                     for i in kat_df[kat_df["Oda No"] == oda].index:
                         r = f_df.loc[i]
                         
-                        # --- TİK OLUŞTURMA ALANI (GÜNCELLENDİ: X ve Check) ---
                         ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵", "Belirsiz": "⚪"}.get(r['Durum'], "⚪")
                         tikler = ""
-                        
-                        # Etüt
                         if "Var" in str(r['Etüd']): tikler += " [E✅]"
                         elif "Yok" in str(r['Etüd']): tikler += " [E❌]"
-                        
-                        # Yat
                         if "Var" in str(r['Yat']): tikler += " [Y✅]"
                         elif "Yok" in str(r['Yat']): tikler += " [Y❌]"
                         
