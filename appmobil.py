@@ -171,60 +171,33 @@ def kat_bul(oda_no):
         else: return "DİĞER"
     except: return "DİĞER"
 
-# --- GÜÇLENDİRİLMİŞ FONT YÖNETİCİSİ ---
+# --- FONT YÖNETİCİSİ ---
 def tr_font_getir():
-    font_adi = "DejaVuSans"
-    font_yolu = "DejaVuSans.ttf"
-    
-    # 1. Zaten yüklüyse
-    if font_adi in pdfmetrics.getRegisteredFontNames():
-        return font_adi
-
-    # 2. Dosya kontrolü ve İndirme
+    font_adi = "Roboto"
+    font_yolu = "Roboto-Regular.ttf"
+    if font_adi in pdfmetrics.getRegisteredFontNames(): return font_adi
     if not os.path.exists(font_yolu) or os.path.getsize(font_yolu) < 10000:
-        
-        # Link Listesi (Biri çalışmazsa diğerini dener)
-        linkler = [
-            "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/master/ttf/DejaVuSans.ttf",
-            "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf",
-            "https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Regular.ttf"
-        ]
-        
-        # Tarayıcı gibi görünmek için header
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-
-        for url in linkler:
-            try:
-                # verify=False güvenlik duvarını aşar
-                r = requests.get(url, headers=headers, timeout=20, verify=False)
-                if r.status_code == 200 and len(r.content) > 10000:
-                    with open(font_yolu, 'wb') as f:
-                        f.write(r.content)
-                    break # Başarılıysa döngüden çık
-            except:
-                continue
-
-    # 3. Fontu Kaydet
-    try:
-        pdfmetrics.registerFont(TTFont(font_adi, font_yolu))
-        return font_adi
-    except:
-        # Hiçbir şey çalışmazsa mecburen Helvetica
-        if os.path.exists(font_yolu): os.remove(font_yolu)
+        try:
+            url = "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf"
+            r = requests.get(url, timeout=10, verify=False)
+            if r.status_code == 200: 
+                with open(font_yolu, 'wb') as f: f.write(r.content)
+            else: return "Helvetica"
+        except: return "Helvetica"
+    try: pdfmetrics.registerFont(TTFont(font_adi, font_yolu)); return font_adi
+    except: 
+        try: os.remove(font_yolu)
+        except: pass
         return "Helvetica"
 
-# --- TÜRKÇE BÜYÜTME ---
 def tr_upper(text):
     if not text: return ""
     return text.replace("i", "İ").replace("ı", "I").upper()
 
-# --- PDF OLUŞTURUCU ---
+# --- PDF ---
 def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     b = BytesIO(); c = canvas.Canvas(b, pagesize=A4); w, h = A4
     font = tr_font_getir()
-    
     secili_katlar = []
     if b1: secili_katlar.append("1. KAT")
     if b2: secili_katlar.append("2. KAT")
@@ -236,48 +209,31 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     df_pdf["_KAT"] = df_pdf["Oda No"].apply(kat_bul)
     df_pdf = df_pdf[df_pdf["_KAT"].isin(secili_katlar)]
 
-    # BAŞLIK
     c.setFont(font, 16); c.drawString(40, h-50, "YURT YOKLAMA LİSTESİ")
     c.setFont(font, 10); c.drawString(40, h-75, f"Tarih: {datetime.now().strftime('%d.%m.%Y')}")
     c.setFont(font, 9)
     y_h = 50
-    
     if b1: c.drawRightString(w-40, h-y_h, f"1. Kat: {tr_upper(b1)}"); y_h+=12
     if b2: c.drawRightString(w-40, h-y_h, f"2. Kat: {tr_upper(b2)}"); y_h+=12
     if b3: c.drawRightString(w-40, h-y_h, f"3. Kat: {tr_upper(b3)}")
-    
     c.line(40, h-90, w-40, h-90)
     
     data = [["Ad Soyad", "Oda", "Drm", "İzin", "Etüd", "Yat", "Msj"]]
-    
     for _, r in df_pdf.sort_values("Oda No").iterrows():
         drm_str = str(r['Durum']); d_kisa = "?" if (drm_str=="Belirsiz" or not drm_str) else drm_str[0]
-        izn_str = str(r['İzin Durumu'])
-        if r['Durum']=="Yurtta": i_kisa="-"
-        elif not izn_str or len(izn_str)==0: i_kisa="-"
-        else: i_kisa = izn_str[0]
-
-        data.append([
-            str(r['Ad Soyad'])[:22],
-            str(r['Oda No']), 
-            d_kisa, i_kisa, 
-            str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), 
-            str(r['Yat']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), 
-            "OK" if "Atıldı" in str(r['Mesaj Durumu']) else ""
-        ])
+        izn_str = str(r['İzin Durumu']); i_kisa="-" if (r['Durum']=="Yurtta" or not izn_str) else izn_str[0]
+        data.append([str(r['Ad Soyad'])[:22], str(r['Oda No']), d_kisa, i_kisa, str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), str(r['Yat']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), "OK" if "Atıldı" in str(r['Mesaj Durumu']) else ""])
     
     t = Table(data, colWidths=[120, 30, 30, 30, 30, 30, 40]); 
     t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1),font),('FONTSIZE',(0,0),(-1,-1),8)]))
     t.wrapOn(c, w, h); t.drawOn(c, 40, h-(110+len(data)*20))
     
-    c.showPage(); c.setFont(font, 16); c.drawString(40, h-50, tr_upper("GÜNLÜK KAT TUTANAKLARI")); c.line(40, h-60, w-40, h-60)
-    y_pos = h-100
+    c.showPage(); c.setFont(font, 16); c.drawString(40, h-50, tr_upper("GÜNLÜK KAT TUTANAKLARI")); c.line(40, h-60, w-40, h-60); y_pos = h-100
     def yazdir_tutanak(baslik, metin, y):
         c.setFont(font, 12); c.setFillColor(colors.darkblue); c.drawString(40, y, baslik); y-=20
         c.setFont(font, 10); c.setFillColor(colors.black)
         for line in simpleSplit(metin, font, 10, w-80): c.drawString(40, y, line); y -= 15
         return y-30
-
     if b1: y_pos = yazdir_tutanak(f"1. KAT TUTANAĞI ({tr_upper(b1)})", t1, y_pos)
     if b2: y_pos = yazdir_tutanak(f"2. KAT TUTANAĞI ({tr_upper(b2)})", t2, y_pos)
     if b3: y_pos = yazdir_tutanak(f"3. KAT TUTANAĞI ({tr_upper(b3)})", t3, y_pos)
@@ -337,8 +293,16 @@ if menu == "📋 LİSTE":
                     st.markdown(f"##### 🛏️ Oda {oda}")
                     for i in kat_df[kat_df["Oda No"] == oda].index:
                         r = f_df.loc[i]
+                        
+                        # --- TİK OLUŞTURMA ALANI (GÜNCELLENDİ) ---
                         ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵", "Belirsiz": "⚪"}.get(r['Durum'], "⚪")
-                        with st.expander(f"{ikon} {r['Ad Soyad']}"):
+                        tikler = ""
+                        
+                        # Etüt veya Yat işaretliyse başlığa tik koy
+                        if "Var" in str(r['Etüd']) or "Yok" in str(r['Etüd']): tikler += " [E✅]"
+                        if "Var" in str(r['Yat']) or "Yok" in str(r['Yat']): tikler += " [Y✅]"
+                        
+                        with st.expander(f"{ikon} {r['Ad Soyad']} {tikler}"):
                             st.caption("Durum Seçiniz:")
                             secenekler = ["Yurtta", "İzinli", "Evde"]; 
                             if r['Durum'] == "Belirsiz": secenekler.insert(0, "Belirsiz")
@@ -443,3 +407,4 @@ elif menu == "📄 PDF":
     b3 = c3.text_input("3. Kat Belletmen")
     if st.button("PDF Oluştur", type="primary"):
         st.download_button("⬇️ İndir", pdf_yap(st.session_state.df, b1, b2, b3, st.session_state.tutanak_1, st.session_state.tutanak_2, st.session_state.tutanak_3), "yoklama.pdf", "application/pdf")
+
