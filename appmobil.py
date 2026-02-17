@@ -294,13 +294,17 @@ if menu == "📋 LİSTE":
                     for i in kat_df[kat_df["Oda No"] == oda].index:
                         r = f_df.loc[i]
                         
-                        # --- TİK OLUŞTURMA ALANI (GÜNCELLENDİ) ---
+                        # --- TİK OLUŞTURMA ALANI (GÜNCELLENDİ: X ve Check) ---
                         ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵", "Belirsiz": "⚪"}.get(r['Durum'], "⚪")
                         tikler = ""
                         
-                        # Etüt veya Yat işaretliyse başlığa tik koy
-                        if "Var" in str(r['Etüd']) or "Yok" in str(r['Etüd']): tikler += " [E✅]"
-                        if "Var" in str(r['Yat']) or "Yok" in str(r['Yat']): tikler += " [Y✅]"
+                        # Etüt
+                        if "Var" in str(r['Etüd']): tikler += " [E✅]"
+                        elif "Yok" in str(r['Etüd']): tikler += " [E❌]"
+                        
+                        # Yat
+                        if "Var" in str(r['Yat']): tikler += " [Y✅]"
+                        elif "Yok" in str(r['Yat']): tikler += " [Y❌]"
                         
                         with st.expander(f"{ikon} {r['Ad Soyad']} {tikler}"):
                             st.caption("Durum Seçiniz:")
