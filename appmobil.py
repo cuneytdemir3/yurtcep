@@ -17,7 +17,7 @@ from datetime import datetime
 import time
 import warnings
 
-# SSL uyarılarını ve gereksiz hataları gizle
+# SSL ve uyarıları kapat
 warnings.filterwarnings("ignore")
 
 # --- MOBİL AYARLAR ---
@@ -119,8 +119,7 @@ def get_client():
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
         return gspread.authorize(creds)
     except Exception as e:
-        # Hata olsa bile uygulamayı durdurma, uyarı ver
-        st.error("🚨 Sunucu Bağlantı Hatası! İnternetinizi kontrol edin.")
+        st.error("🚨 Sunucu Bağlantı Hatası!")
         return None
 
 def get_sheet(): 
@@ -146,7 +145,7 @@ if "tutanak_1" not in st.session_state: st.session_state.tutanak_1 = "Olumsuz bi
 if "tutanak_2" not in st.session_state: st.session_state.tutanak_2 = "Olumsuz bir durum yoktur."
 if "tutanak_3" not in st.session_state: st.session_state.tutanak_3 = "Olumsuz bir durum yoktur."
 
-# Verileri Çekme (Hata Korumalı)
+# Verileri Çekme
 if "df" not in st.session_state:
     try:
         s = get_sheet()
@@ -157,41 +156,27 @@ if "df" not in st.session_state:
                 if c not in st.session_state.df.columns: st.session_state.df[c] = "-"
             st.session_state.df = st.session_state.df.fillna("-").astype(str)
         else:
-            st.warning("Veriler çekilemedi. Tekrar deneyin.")
             st.session_state.df = pd.DataFrame(columns=SUTUNLAR)
     except Exception as e: 
-        st.error(f"Veri Yükleme Hatası: {e}")
+        st.error(f"Veri Hatası: {e}")
         st.stop()
 
-# --- GÜVENLİ KAYDETME FONKSİYONU ---
 def kaydet():
     try: 
         s = get_sheet()
-        if s:
-            s.update([st.session_state.df.columns.tolist()] + st.session_state.df.astype(str).values.tolist())
-        else:
-            st.warning("⚠️ İnternet hatası: Kayıt Google'a gönderilemedi. Lütfen sayfayı yenilemeden tekrar deneyin.")
-    except Exception as e: 
-        st.warning(f"⚠️ Kayıt Hatası (API Limiti Dolmuş Olabilir): {e}. Lütfen 5 saniye bekleyip tekrar deneyin.")
+        if s: s.update([st.session_state.df.columns.tolist()] + st.session_state.df.astype(str).values.tolist())
+    except: st.warning("⚠️ Kayıt edilemedi (İnternet/API hatası).")
 
 def arsivle():
     try:
         t = datetime.now().strftime("%d.%m.%Y"); d = st.session_state.df.copy(); d.insert(0, "Tarih", t)
         l = get_log()
-        if l:
-            l.append_rows(d.astype(str).values.tolist()); st.success(f"✅ {t} Arşivlendi!"); st.balloons()
+        if l: l.append_rows(d.astype(str).values.tolist()); st.success(f"✅ {t} Arşivlendi!"); st.balloons()
     except: st.error("Arşiv Hatası")
 
 def sifirla_yeni_yoklama():
-    # Sadece verileri güncelle, yapıyı bozma
-    st.session_state.df["Durum"] = "Belirsiz"
-    st.session_state.df["Etüd"] = "⚪"
-    st.session_state.df["Yat"] = "⚪"
-    st.session_state.df["Mesaj Durumu"] = "-"
-    kaydet()
-    st.success("Tüm liste sıfırlandı! Yeni güne başlandı.")
-    time.sleep(1)
-    st.rerun()
+    st.session_state.df["Durum"] = "Belirsiz"; st.session_state.df["Etüd"] = "⚪"; st.session_state.df["Yat"] = "⚪"; st.session_state.df["Mesaj Durumu"] = "-"
+    kaydet(); st.success("Sıfırlandı!"); time.sleep(1); st.rerun()
 
 def kat_bul(oda_no):
     try:
@@ -202,33 +187,51 @@ def kat_bul(oda_no):
         else: return "DİĞER"
     except: return "DİĞER"
 
-# --- FONT YÖNETİCİSİ ---
-def tr_font_getir():
+# --- FONT YÖNETİCİSİ (TMP KLASÖRÜ ÇÖZÜMÜ) ---
+@st.cache_resource
+def font_yukle():
+    # Streamlit Cloud'da yazılabilir tek yer /tmp klasörüdür.
+    font_yolu = "/tmp/Roboto-Regular.ttf"
     font_adi = "Roboto"
-    font_yolu = "Roboto-Regular.ttf"
-    if font_adi in pdfmetrics.getRegisteredFontNames(): return font_adi
+    
+    # İndirme Linkleri (Yedekli)
+    linkler = [
+        "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf",
+        "https://raw.githubusercontent.com/googlefonts/roboto/main/src/hinted/Roboto-Regular.ttf"
+    ]
+    
+    # Dosya yoksa indir
     if not os.path.exists(font_yolu) or os.path.getsize(font_yolu) < 10000:
-        try:
-            url = "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf"
-            r = requests.get(url, timeout=10, verify=False)
-            if r.status_code == 200: 
-                with open(font_yolu, 'wb') as f: f.write(r.content)
-            else: return "Helvetica"
-        except: return "Helvetica"
-    try: pdfmetrics.registerFont(TTFont(font_adi, font_yolu)); return font_adi
-    except: 
-        try: os.remove(font_yolu)
-        except: pass
-        return "Helvetica"
+        for url in linkler:
+            try:
+                r = requests.get(url, timeout=10, verify=False)
+                if r.status_code == 200:
+                    with open(font_yolu, "wb") as f:
+                        f.write(r.content)
+                    break
+            except: pass
+            
+    # Fontu Kaydetmeyi Dene
+    try:
+        pdfmetrics.registerFont(TTFont(font_adi, font_yolu))
+        return font_adi # Başarılıysa Roboto
+    except:
+        return "Helvetica" # Başarısızsa Standart
 
-def tr_upper(text):
+def tr_upper(text, font_adi):
     if not text: return ""
+    # Eğer font Helvetica ise (Yani Türkçe font inmemişse) harfleri bozmamak için İngilizce karakter kullan
+    if font_adi == "Helvetica":
+        return text.replace("İ", "I").replace("ı", "i").replace("Ğ", "G").replace("ğ", "g").replace("Ş", "S").replace("ş", "s").upper()
+    
+    # Font sağlamsa Türkçe karakterleri düzgün büyüt
     return text.replace("i", "İ").replace("ı", "I").upper()
 
-# --- PDF ---
+# --- PDF OLUŞTURUCU ---
 def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     b = BytesIO(); c = canvas.Canvas(b, pagesize=A4); w, h = A4
-    font = tr_font_getir()
+    font = font_yukle() # Cache'lenmiş fontu al
+    
     secili_katlar = []
     if b1: secili_katlar.append("1. KAT")
     if b2: secili_katlar.append("2. KAT")
@@ -240,34 +243,51 @@ def pdf_yap(df, b1, b2, b3, t1, t2, t3):
     df_pdf["_KAT"] = df_pdf["Oda No"].apply(kat_bul)
     df_pdf = df_pdf[df_pdf["_KAT"].isin(secili_katlar)]
 
-    c.setFont(font, 16); c.drawString(40, h-50, "YURT YOKLAMA LİSTESİ")
+    # Başlık
+    # Font Helvetica ise başlığı bozmamak için manuel düzeltme
+    baslik = "YURT YOKLAMA LİSTESİ"
+    if font == "Helvetica": baslik = "YURT YOKLAMA LISTESI"
+        
+    c.setFont(font, 16); c.drawString(40, h-50, baslik)
     c.setFont(font, 10); c.drawString(40, h-75, f"Tarih: {datetime.now().strftime('%d.%m.%Y')}")
     c.setFont(font, 9)
     y_h = 50
-    if b1: c.drawRightString(w-40, h-y_h, f"1. Kat: {tr_upper(b1)}"); y_h+=12
-    if b2: c.drawRightString(w-40, h-y_h, f"2. Kat: {tr_upper(b2)}"); y_h+=12
-    if b3: c.drawRightString(w-40, h-y_h, f"3. Kat: {tr_upper(b3)}")
+    if b1: c.drawRightString(w-40, h-y_h, f"1. Kat: {tr_upper(b1, font)}"); y_h+=12
+    if b2: c.drawRightString(w-40, h-y_h, f"2. Kat: {tr_upper(b2, font)}"); y_h+=12
+    if b3: c.drawRightString(w-40, h-y_h, f"3. Kat: {tr_upper(b3, font)}")
     c.line(40, h-90, w-40, h-90)
     
     data = [["Ad Soyad", "Oda", "Drm", "İzin", "Etüd", "Yat", "Msj"]]
     for _, r in df_pdf.sort_values("Oda No").iterrows():
+        # Veri Hazırlığı
+        ad = str(r['Ad Soyad'])[:22]
+        if font == "Helvetica": # Font bozuksa ismi de düzelt
+             ad = ad.replace("İ", "I").replace("ı", "i").replace("Ğ", "G").replace("ğ", "g").replace("Ş", "S").replace("ş", "s")
+             
         drm_str = str(r['Durum']); d_kisa = "?" if (drm_str=="Belirsiz" or not drm_str) else drm_str[0]
         izn_str = str(r['İzin Durumu']); i_kisa="-" if (r['Durum']=="Yurtta" or not izn_str) else izn_str[0]
-        data.append([str(r['Ad Soyad'])[:22], str(r['Oda No']), d_kisa, i_kisa, str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), str(r['Yat']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), "OK" if "Atıldı" in str(r['Mesaj Durumu']) else ""])
+        
+        data.append([ad, str(r['Oda No']), d_kisa, i_kisa, str(r['Etüd']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), str(r['Yat']).replace("✅ Var","+").replace("❌ Yok","-").replace("⚪",""), "OK" if "Atıldı" in str(r['Mesaj Durumu']) else ""])
     
     t = Table(data, colWidths=[120, 30, 30, 30, 30, 30, 40]); 
     t.setStyle(TableStyle([('GRID',(0,0),(-1,-1),0.5,colors.black),('FONTNAME',(0,0),(-1,-1),font),('FONTSIZE',(0,0),(-1,-1),8)]))
     t.wrapOn(c, w, h); t.drawOn(c, 40, h-(110+len(data)*20))
     
-    c.showPage(); c.setFont(font, 16); c.drawString(40, h-50, tr_upper("GÜNLÜK KAT TUTANAKLARI")); c.line(40, h-60, w-40, h-60); y_pos = h-100
+    c.showPage(); c.setFont(font, 16)
+    tutanak_baslik = "GÜNLÜK KAT TUTANAKLARI"
+    if font == "Helvetica": tutanak_baslik = "GUNLUK KAT TUTANAKLARI"
+        
+    c.drawString(40, h-50, tutanak_baslik); c.line(40, h-60, w-40, h-60); y_pos = h-100
+    
     def yazdir_tutanak(baslik, metin, y):
         c.setFont(font, 12); c.setFillColor(colors.darkblue); c.drawString(40, y, baslik); y-=20
         c.setFont(font, 10); c.setFillColor(colors.black)
         for line in simpleSplit(metin, font, 10, w-80): c.drawString(40, y, line); y -= 15
         return y-30
-    if b1: y_pos = yazdir_tutanak(f"1. KAT TUTANAĞI ({tr_upper(b1)})", t1, y_pos)
-    if b2: y_pos = yazdir_tutanak(f"2. KAT TUTANAĞI ({tr_upper(b2)})", t2, y_pos)
-    if b3: y_pos = yazdir_tutanak(f"3. KAT TUTANAĞI ({tr_upper(b3)})", t3, y_pos)
+    
+    if b1: y_pos = yazdir_tutanak(f"1. KAT TUTANAĞI ({tr_upper(b1, font)})", t1, y_pos)
+    if b2: y_pos = yazdir_tutanak(f"2. KAT TUTANAĞI ({tr_upper(b2, font)})", t2, y_pos)
+    if b3: y_pos = yazdir_tutanak(f"3. KAT TUTANAĞI ({tr_upper(b3, font)})", t3, y_pos)
     c.save(); b.seek(0); return b
 
 def wp(tel, m):
@@ -290,29 +310,16 @@ def msj(i,m): st.session_state.df.at[i,"Mesaj Durumu"]=m; kaydet()
 c1, c2 = st.columns([3,1])
 with c1: st.title("📱 Mobil Takip")
 with c2: 
-    # Sadece cache'i silmek yerine komple yenileme yapalım
-    if st.button("🔄"): 
-        st.cache_data.clear()
-        st.rerun()
+    if st.button("🔄"): st.cache_data.clear(); st.rerun()
 
 menu = st.selectbox("Menü", ["📋 LİSTE", "📝 TUTANAK", "➕ EKLE", "🗑️ SİL", "🗄️ GEÇMİŞ", "📄 PDF"])
 
 if menu == "📋 LİSTE":
-    
-    # --- GÜVENLİ SIFIRLAMA BUTONU ---
-    with st.expander("⚠️ YENİ GÜN BAŞLAT (Dikkat)"):
-        st.warning("Bu butona basarsanız TÜM KATLARDAKİ veriler sıfırlanır.")
-        sifirla_kilit = st.checkbox("Evet, tüm listeyi silmek ve yeni gün başlatmak istiyorum.")
-        if sifirla_kilit:
-            if st.button("🔴 SIFIRLA VE BAŞLAT", type="primary", use_container_width=True):
-                sifirla_yeni_yoklama()
-    
+    with st.expander("⚠️ YENİ GÜN BAŞLAT"):
+        st.warning("Bu işlem tüm listeyi sıfırlar.")
+        if st.button("🔴 SIFIRLA VE BAŞLAT", type="primary", use_container_width=True): sifirla_yeni_yoklama()
     st.write("---")
-    
-    # Diğer belletmenlerin verisini çekmek için buton
-    if st.button("⬇️ VERİLERİ GÜNCELLE / SENKRONİZE ET", type="secondary", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
+    if st.button("⬇️ VERİLERİ GÜNCELLE", type="secondary", use_container_width=True): st.cache_data.clear(); st.rerun()
 
     c_kaydet, c_arsiv = st.columns(2)
     with c_kaydet: 
@@ -339,14 +346,12 @@ if menu == "📋 LİSTE":
                     st.markdown(f"##### 🛏️ Oda {oda}")
                     for i in kat_df[kat_df["Oda No"] == oda].index:
                         r = f_df.loc[i]
-                        
                         ikon = {"Yurtta": "🟢", "İzinli": "🟡", "Evde": "🔵", "Belirsiz": "⚪"}.get(r['Durum'], "⚪")
                         tikler = ""
                         if "Var" in str(r['Etüd']): tikler += " [E✅]"
                         elif "Yok" in str(r['Etüd']): tikler += " [E❌]"
                         if "Var" in str(r['Yat']): tikler += " [Y✅]"
                         elif "Yok" in str(r['Yat']): tikler += " [Y❌]"
-                        
                         with st.expander(f"{ikon} {r['Ad Soyad']} {tikler}"):
                             st.caption("Durum Seçiniz:")
                             secenekler = ["Yurtta", "İzinli", "Evde"]; 
