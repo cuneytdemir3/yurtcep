@@ -2,7 +2,9 @@
 import streamlit as st
 import pandas as pd
 import time
-from database import init_data, save_data, archive_data, reset_daily_data, get_log, SUTUNLAR
+
+# Yeni Firebase fonksiyonlarımızı içeri aktarıyoruz
+from database import init_data, save_data, archive_data, reset_daily_data, get_archive_df, SUTUNLAR
 from helpers import inject_css, authenticate, kat_bul, wp, sablon_indir
 from pdf_engine import pdf_yap
 
@@ -160,10 +162,12 @@ elif menu == "🗑️ SİL":
                         st.session_state.df = st.session_state.df.drop(i).reset_index(drop=True); save_data(); st.success("Silindi!"); time.sleep(1); st.rerun()
 
 elif menu == "🗄️ GEÇMİŞ":
-    l = get_log()
-    if l:
-        try: d=pd.DataFrame(l.get_all_records()); st.dataframe(d[d["Tarih"]==st.selectbox("Tarih", d["Tarih"].unique())], use_container_width=True)
-        except: st.info("Kayıt yok")
+    d = get_archive_df()
+    if not d.empty:
+        secili_tarih = st.selectbox("Tarih Seç", d["Tarih"].unique())
+        st.dataframe(d[d["Tarih"] == secili_tarih], use_container_width=True)
+    else:
+        st.info("Henüz arşivlenmiş kayıt bulunmamaktadır.")
 
 elif menu == "📄 PDF":
     st.subheader("PDF Raporu")
@@ -173,4 +177,3 @@ elif menu == "📄 PDF":
     b3 = c3.text_input("3. Kat Belletmen")
     if st.button("PDF Oluştur", type="primary"):
         st.download_button("⬇️ İndir", pdf_yap(st.session_state.df, b1, b2, b3, st.session_state.tutanak_1, st.session_state.tutanak_2, st.session_state.tutanak_3), "yoklama.pdf", "application/pdf")
-
