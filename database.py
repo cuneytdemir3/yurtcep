@@ -1,36 +1,24 @@
 # database.py
 import streamlit as st
 import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
+import json
+import firebase_admin
+from firebase_admin import credentials, firestore
 from datetime import datetime
 
-SHEET_LINKI = "https://docs.google.com/spreadsheets/d/14vue2y63WXYE6-uXqtiEUgGU-yVrBCJy6R6Nj_EdyMI/edit?gid=0#gid=0"
 SUTUNLAR = ["Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Yat", "Mesaj Durumu", "Baba Adı", "Anne Adı", "Baba Tel", "Anne Tel"]
 
-def get_client():
-    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    try:
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        return gspread.authorize(creds)
-    except Exception as e:
-        st.error("🚨 Sunucu Bağlantı Hatası!")
-        return None
+# Firebase Bağlantısını Başlat (Cache ile hızlandırıldı)
+@st.cache_resource
+def get_db():
+    if not firebase_admin._apps:
+        # Secrets'tan JSON verisini okuyup Firebase'e yetki veriyoruz
+        key_dict = json.loads(st.secrets["firebase_json"])
+        cred = credentials.Certificate(key_dict)
+        firebase_admin.initialize_app(cred)
+    return firestore.client()
 
-def get_sheet(): 
-    c = get_client()
-    return c.open_by_url(SHEET_LINKI).sheet1 if c else None
-
-def get_log():
-    c = get_client()
-    if c:
-        s = c.open_by_url(SHEET_LINKI)
-        try: return s.worksheet("GECMIS")
-        except: 
-            ws = s.add_worksheet("GECMIS", 1000, 12)
-            ws.append_row(["Tarih"] + SUTUNLAR)
-            return ws
-    return None
+db = get_db()
 
 def init_data():
     if "tutanak_1" not in st.session_state: st.session_state.tutanak_1 = "Olumsuz bir durum yoktur."
@@ -39,31 +27,37 @@ def init_data():
 
     if "df" not in st.session_state:
         try:
-            s = get_sheet()
-            if s:
-                d = s.get_all_records()
-                st.session_state.df = pd.DataFrame(d) if d else pd.DataFrame(columns=SUTUNLAR)
+            # Firestore'dan güncel listeyi çek
+            doc = db.collection('sistem').document('guncel_liste').get()
+            if doc.exists:
+                data = doc.to_dict().get('veriler', [])
+                df = pd.DataFrame(data)
                 for c in SUTUNLAR:
-                    if c not in st.session_state.df.columns: st.session_state.df[c] = "-"
-                st.session_state.df = st.session_state.df.fillna("-").astype(str)
+                    if c not in df.columns: df[c] = "-"
+                st.session_state.df = df.fillna("-").astype(str)
             else:
                 st.session_state.df = pd.DataFrame(columns=SUTUNLAR)
         except Exception as e: 
-            st.error(f"Veri Hatası: {e}")
-            st.stop()
+            st.error(f"Veritabanı Hatası: {e}")
+            st.session_state.df = pd.DataFrame(columns=SUTUNLAR)
 
 def save_data():
     try: 
-        s = get_sheet()
-        if s: s.update([st.session_state.df.columns.tolist()] + st.session_state.df.astype(str).values.tolist())
-    except: st.warning("⚠️ Kayıt edilemedi (İnternet/API hatası).")
+        # Verileri saniyeler içinde Firestore'a yaz
+        records = st.session_state.df.to_dict(orient='records')
+        db.collection('sistem').document('guncel_liste').set({'veriler': records})
+    except Exception as e: 
+        st.warning(f"⚠️ Kayıt edilemedi: {e}")
 
 def archive_data():
     try:
-        t = datetime.now().strftime("%d.%m.%Y"); d = st.session_state.df.copy(); d.insert(0, "Tarih", t)
-        l = get_log()
-        if l: l.append_rows(d.astype(str).values.tolist()); st.success(f"✅ {t} Arşivlendi!"); st.balloons()
-    except: st.error("Arşiv Hatası")
+        t = datetime.now().strftime("%d.%m.%Y")
+        records = st.session_state.df.to_dict(orient='records')
+        # Geçmiş günleri ayrı bir klasöre (gecmis) kaydet
+        db.collection('gecmis').document(t).set({'tarih': t, 'veriler': records})
+        st.success(f"✅ {t} Başarıyla Arşivlendi!"); st.balloons()
+    except Exception as e: 
+        st.error(f"Arşiv Hatası: {e}")
 
 def reset_daily_data():
     st.session_state.df["Durum"] = "Belirsiz"
@@ -71,3 +65,21 @@ def reset_daily_data():
     st.session_state.df["Yat"] = "⚪"
     st.session_state.df["Mesaj Durumu"] = "-"
     save_data()
+
+# Geçmiş verileri tablo olarak getiren fonksiyon
+def get_archive_df():
+    try:
+        docs = db.collection('gecmis').stream()
+        all_records = []
+        for doc in docs:
+            data = doc.to_dict()
+            tarih = data.get('tarih', '')
+            veriler = data.get('veriler', [])
+            for v in veriler:
+                v['Tarih'] = tarih
+                all_records.append(v)
+        if all_records:
+            return pd.DataFrame(all_records)
+        return pd.DataFrame()
+    except:
+        return pd.DataFrame()
