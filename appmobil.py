@@ -23,7 +23,7 @@ def msj(i,m): st.session_state.df.at[i,"Mesaj Durumu"] = m; save_data()
 KAT_RENKLERI = {"1. KAT": "#E3F2FD", "2. KAT": "#E8F5E9", "3. KAT": "#FFF3E0", "DİĞER": "#F3E5F5"}
 
 # ==========================================
-# 1. YENİ YAN MENÜ (SIDEBAR) TASARIMI
+# 1. YAN MENÜ (SIDEBAR) TASARIMI
 # ==========================================
 with st.sidebar:
     st.markdown("<h2 style='text-align: center;'>📱 Yurt Mobil</h2>", unsafe_allow_html=True)
@@ -31,15 +31,15 @@ with st.sidebar:
     menu = st.radio(
         "MENÜ", 
         ["📋 LİSTE", "📝 TUTANAK", "➕ EKLE", "🗑️ SİL", "🗄️ GEÇMİŞ", "📄 PDF"],
-        label_visibility="collapsed" # Üstteki Menü yazısını gizler, daha şık durur
+        label_visibility="collapsed" 
     )
     st.divider()
-    st.caption("v2.0 - Firebase Altyapısı")
+    st.caption("v2.1 - Özel Tasarım")
 
 # Ana Ekran Üst Başlık
 c1, c2 = st.columns([4,1])
 with c1: 
-    st.title(menu) # Başlık artık seçilen menüye göre değişiyor
+    st.title(menu) 
 with c2: 
     if st.button("🔄 Yenile", use_container_width=True): st.cache_data.clear(); st.rerun()
 
@@ -50,7 +50,7 @@ if menu == "📋 LİSTE":
     
     f_df = st.session_state.df
     
-    # 2. YENİ CANLI İSTATİSTİK KARTLARI (DASHBOARD)
+    # 2. RENKLİ İSTATİSTİK KARTLARI (DASHBOARD)
     if not f_df.empty:
         toplam = len(f_df)
         yurtta = len(f_df[f_df['Durum'] == 'Yurtta'])
@@ -59,10 +59,32 @@ if menu == "📋 LİSTE":
 
         st.markdown("##### 📊 Anlık Durum")
         k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Toplam", toplam)
-        k2.metric("🟢 Yurtta", yurtta)
-        k3.metric("🟡 İzinli", izinli)
-        k4.metric("⚪ Belirsiz", belirsiz)
+        
+        # Mavi - Toplam
+        k1.markdown(f"""<div style="background-color: #E3F2FD; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #BBDEFB;">
+            <p style="margin: 0; font-size: 13px; color: #1565C0; font-weight: bold;">Toplam</p>
+            <h2 style="margin: 0; color: #0D47A1; font-size: 26px;">{toplam}</h2>
+        </div>""", unsafe_allow_html=True)
+        
+        # Yeşil - Yurtta
+        k2.markdown(f"""<div style="background-color: #E8F5E9; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #C8E6C9;">
+            <p style="margin: 0; font-size: 13px; color: #2E7D32; font-weight: bold;">🟢 Yurtta</p>
+            <h2 style="margin: 0; color: #1B5E20; font-size: 26px;">{yurtta}</h2>
+        </div>""", unsafe_allow_html=True)
+        
+        # Turuncu - İzinli
+        k3.markdown(f"""<div style="background-color: #FFF3E0; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #FFE0B2;">
+            <p style="margin: 0; font-size: 13px; color: #E65100; font-weight: bold;">🟡 İzinli</p>
+            <h2 style="margin: 0; color: #BF360C; font-size: 26px;">{izinli}</h2>
+        </div>""", unsafe_allow_html=True)
+        
+        # Gri - Belirsiz
+        k4.markdown(f"""<div style="background-color: #F5F5F5; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #E0E0E0;">
+            <p style="margin: 0; font-size: 13px; color: #616161; font-weight: bold;">⚪ Belirsiz</p>
+            <h2 style="margin: 0; color: #212121; font-size: 26px;">{belirsiz}</h2>
+        </div>""", unsafe_allow_html=True)
+        
+        st.write("") # Araya küçük bir boşluk
         st.divider()
 
     # --- Mevcut Liste Araçları ---
