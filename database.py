@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import time
 
-# Yeni 'delete_all_students' fonksiyonunu da içeri aktarıyoruz
 from database import init_data, save_data, archive_data, reset_daily_data, get_archive_df, delete_all_students, SUTUNLAR
 from helpers import inject_css, authenticate, kat_bul, wp, sablon_indir
 from pdf_engine import pdf_yap
