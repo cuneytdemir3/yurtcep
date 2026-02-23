@@ -19,27 +19,29 @@ def izn(i): st.session_state.df.at[i,"İzin Durumu"] = "İzin Yok" if st.session
 def ey(i,t): st.session_state.df.at[i,t] = {"⚪":"✅ Var","✅ Var":"❌ Yok","❌ Yok":"⚪"}.get(st.session_state.df.at[i,t],"⚪"); save_data()
 def msj(i,m): st.session_state.df.at[i,"Mesaj Durumu"] = m; save_data()
 
+# YENİ: Toplu İşlem Algoritması
+def kalanlari_yurtta_yap():
+    mask = st.session_state.df["Durum"] == "Belirsiz"
+    st.session_state.df.loc[mask, "Durum"] = "Yurtta"
+    st.session_state.df.loc[mask, "Mesaj Durumu"] = "-"
+    save_data()
+
 # --- KAT RENKLERİ ---
 KAT_RENKLERI = {"1. KAT": "#E3F2FD", "2. KAT": "#E8F5E9", "3. KAT": "#FFF3E0", "DİĞER": "#F3E5F5"}
 
 # ==========================================
-# 1. YAN MENÜ (SIDEBAR) TASARIMI
+# YAN MENÜ (SIDEBAR)
 # ==========================================
 with st.sidebar:
     st.markdown("<h2 style='text-align: center;'>📱 Yurt Mobil</h2>", unsafe_allow_html=True)
     st.divider()
-    menu = st.radio(
-        "MENÜ", 
-        ["📋 LİSTE", "📝 TUTANAK", "➕ EKLE", "🗑️ SİL", "🗄️ GEÇMİŞ", "📄 PDF"],
-        label_visibility="collapsed" 
-    )
+    menu = st.radio("MENÜ", ["📋 LİSTE", "📝 TUTANAK", "➕ EKLE", "🗑️ SİL", "🗄️ GEÇMİŞ", "📄 PDF"], label_visibility="collapsed")
     st.divider()
-    st.caption("v2.1 - Özel Tasarım")
+    st.caption("v2.2 - Hızlı İşlem & Dashboard")
 
 # Ana Ekran Üst Başlık
 c1, c2 = st.columns([4,1])
-with c1: 
-    st.title(menu) 
+with c1: st.title(menu) 
 with c2: 
     if st.button("🔄 Yenile", use_container_width=True): st.cache_data.clear(); st.rerun()
 
@@ -50,49 +52,43 @@ if menu == "📋 LİSTE":
     
     f_df = st.session_state.df
     
-    # 2. RENKLİ İSTATİSTİK KARTLARI (DASHBOARD)
     if not f_df.empty:
         toplam = len(f_df)
         yurtta = len(f_df[f_df['Durum'] == 'Yurtta'])
         izinli = len(f_df[f_df['Durum'].isin(['İzinli', 'Evde'])])
         belirsiz = len(f_df[f_df['Durum'] == 'Belirsiz'])
+        
+        # 1. YENİ: DİNAMİK İLERLEME ÇUBUĞU
+        islem_gorenler = toplam - belirsiz
+        yuzde = int((islem_gorenler / toplam) * 100) if toplam > 0 else 0
+        st.progress(yuzde / 100.0, text=f"📊 Günlük Yoklama İlerlemesi: %{yuzde} Tamamlandı")
 
-        st.markdown("##### 📊 Anlık Durum")
+        # RENKLİ KARTLAR
         k1, k2, k3, k4 = st.columns(4)
+        k1.markdown(f"""<div style="background-color: #E3F2FD; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #BBDEFB;"><p style="margin: 0; font-size: 13px; color: #1565C0; font-weight: bold;">Toplam</p><h2 style="margin: 0; color: #0D47A1; font-size: 26px;">{toplam}</h2></div>""", unsafe_allow_html=True)
+        k2.markdown(f"""<div style="background-color: #E8F5E9; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #C8E6C9;"><p style="margin: 0; font-size: 13px; color: #2E7D32; font-weight: bold;">🟢 Yurtta</p><h2 style="margin: 0; color: #1B5E20; font-size: 26px;">{yurtta}</h2></div>""", unsafe_allow_html=True)
+        k3.markdown(f"""<div style="background-color: #FFF3E0; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #FFE0B2;"><p style="margin: 0; font-size: 13px; color: #E65100; font-weight: bold;">🟡 İzinli</p><h2 style="margin: 0; color: #BF360C; font-size: 26px;">{izinli}</h2></div>""", unsafe_allow_html=True)
+        k4.markdown(f"""<div style="background-color: #F5F5F5; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #E0E0E0;"><p style="margin: 0; font-size: 13px; color: #616161; font-weight: bold;">⚪ Belirsiz</p><h2 style="margin: 0; color: #212121; font-size: 26px;">{belirsiz}</h2></div>""", unsafe_allow_html=True)
+        st.write("")
         
-        # Mavi - Toplam
-        k1.markdown(f"""<div style="background-color: #E3F2FD; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #BBDEFB;">
-            <p style="margin: 0; font-size: 13px; color: #1565C0; font-weight: bold;">Toplam</p>
-            <h2 style="margin: 0; color: #0D47A1; font-size: 26px;">{toplam}</h2>
-        </div>""", unsafe_allow_html=True)
-        
-        # Yeşil - Yurtta
-        k2.markdown(f"""<div style="background-color: #E8F5E9; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #C8E6C9;">
-            <p style="margin: 0; font-size: 13px; color: #2E7D32; font-weight: bold;">🟢 Yurtta</p>
-            <h2 style="margin: 0; color: #1B5E20; font-size: 26px;">{yurtta}</h2>
-        </div>""", unsafe_allow_html=True)
-        
-        # Turuncu - İzinli
-        k3.markdown(f"""<div style="background-color: #FFF3E0; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #FFE0B2;">
-            <p style="margin: 0; font-size: 13px; color: #E65100; font-weight: bold;">🟡 İzinli</p>
-            <h2 style="margin: 0; color: #BF360C; font-size: 26px;">{izinli}</h2>
-        </div>""", unsafe_allow_html=True)
-        
-        # Gri - Belirsiz
-        k4.markdown(f"""<div style="background-color: #F5F5F5; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #E0E0E0;">
-            <p style="margin: 0; font-size: 13px; color: #616161; font-weight: bold;">⚪ Belirsiz</p>
-            <h2 style="margin: 0; color: #212121; font-size: 26px;">{belirsiz}</h2>
-        </div>""", unsafe_allow_html=True)
-        
-        st.write("") # Araya küçük bir boşluk
+        # 3. YENİ: MİNİ GRAFİK (Data Visualization)
+        grafik_verisi = pd.DataFrame({"Durum": ["Yurtta", "İzinli", "Belirsiz"], "Kişi Sayısı": [yurtta, izinli, belirsiz]}).set_index("Durum")
+        st.bar_chart(grafik_verisi, height=150, color="#1565C0")
         st.divider()
 
-    # --- Mevcut Liste Araçları ---
-    with st.expander("⚠️ YENİ GÜN BAŞLAT"):
-        st.warning("Bu işlem tüm listeyi sıfırlar.")
-        if st.button("🔴 SIFIRLA VE BAŞLAT", type="primary", use_container_width=True): 
-            reset_daily_data()
-            st.success("Sıfırlandı!"); time.sleep(1); st.rerun()
+    # --- HIZLI İŞLEM BUTONLARI ---
+    c_sifirla, c_toplu = st.columns(2)
+    with c_sifirla:
+        with st.expander("⚠️ YENİ GÜN BAŞLAT"):
+            st.warning("Tüm liste sıfırlanır.")
+            if st.button("🔴 SIFIRLA", type="primary", use_container_width=True): 
+                reset_daily_data(); st.success("Sıfırlandı!"); time.sleep(1); st.rerun()
+    with c_toplu:
+        # 2. YENİ: SİHİRLİ BUTON (Toplu İşlem)
+        with st.expander("✨ HIZLI YOKLAMA"):
+            st.info("Kalanları 'Yurtta' işaretler.")
+            if st.button("✅ KALANLARI YURTTA SAY", type="primary", use_container_width=True):
+                kalanlari_yurtta_yap(); st.success("Kalan herkes Yurtta olarak işaretlendi!"); time.sleep(1.5); st.rerun()
             
     c_kaydet, c_arsiv = st.columns(2)
     with c_kaydet: 
