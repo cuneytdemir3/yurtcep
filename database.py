@@ -1,4 +1,3 @@
-# database.py
 import streamlit as st
 import pandas as pd
 import json
@@ -8,14 +7,29 @@ from datetime import datetime
 
 SUTUNLAR = ["Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Yat", "Mesaj Durumu", "Baba Adı", "Anne Adı", "Baba Tel", "Anne Tel"]
 
-# Firebase Bağlantısını Başlat (Cache ile hızlandırıldı)
+# --- AKILLI FİREBASE BAĞLANTISI ---
 @st.cache_resource
 def get_db():
     if not firebase_admin._apps:
-        # Secrets'tan JSON verisini okuyup Firebase'e yetki veriyoruz
-        key_dict = json.loads(st.secrets["firebase_json"])
-        cred = credentials.Certificate(key_dict)
-        firebase_admin.initialize_app(cred)
+        try:
+            # 1. İhtimal: Doğrudan yazılmışsa
+            if "firebase_json" in st.secrets:
+                raw_json = st.secrets["firebase_json"]
+            # 2. İhtimal: Yanlışlıkla [firebase] başlığı altına yazılmışsa
+            elif "firebase" in st.secrets and "firebase_json" in st.secrets["firebase"]:
+                raw_json = st.secrets["firebase"]["firebase_json"]
+            else:
+                st.error("🚨 KRİTİK HATA: Streamlit Secrets içinde 'firebase_json' anahtarı bulunamadı!")
+                st.info("Lütfen Streamlit menüsünden 'Settings -> Secrets' kısmına girip JSON verisini doğru eklediğinizden emin olun.")
+                st.stop()
+                
+            key_dict = json.loads(raw_json)
+            cred = credentials.Certificate(key_dict)
+            firebase_admin.initialize_app(cred)
+        except Exception as e:
+            st.error(f"🚨 Firebase Kurulum Hatası: İndirdiğiniz JSON dosyasının içeriği bozuk veya eksik olabilir. Detay: {e}")
+            st.stop()
+            
     return firestore.client()
 
 db = get_db()
@@ -27,7 +41,6 @@ def init_data():
 
     if "df" not in st.session_state:
         try:
-            # Firestore'dan güncel listeyi çek
             doc = db.collection('sistem').document('guncel_liste').get()
             if doc.exists:
                 data = doc.to_dict().get('veriler', [])
@@ -38,12 +51,11 @@ def init_data():
             else:
                 st.session_state.df = pd.DataFrame(columns=SUTUNLAR)
         except Exception as e: 
-            st.error(f"Veritabanı Hatası: {e}")
+            st.error(f"Veritabanı Okuma Hatası: {e}")
             st.session_state.df = pd.DataFrame(columns=SUTUNLAR)
 
 def save_data():
     try: 
-        # Verileri saniyeler içinde Firestore'a yaz
         records = st.session_state.df.to_dict(orient='records')
         db.collection('sistem').document('guncel_liste').set({'veriler': records})
     except Exception as e: 
@@ -53,7 +65,6 @@ def archive_data():
     try:
         t = datetime.now().strftime("%d.%m.%Y")
         records = st.session_state.df.to_dict(orient='records')
-        # Geçmiş günleri ayrı bir klasöre (gecmis) kaydet
         db.collection('gecmis').document(t).set({'tarih': t, 'veriler': records})
         st.success(f"✅ {t} Başarıyla Arşivlendi!"); st.balloons()
     except Exception as e: 
@@ -66,7 +77,6 @@ def reset_daily_data():
     st.session_state.df["Mesaj Durumu"] = "-"
     save_data()
 
-# Geçmiş verileri tablo olarak getiren fonksiyon
 def get_archive_df():
     try:
         docs = db.collection('gecmis').stream()
