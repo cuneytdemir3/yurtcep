@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import time
 
-# Yeni 'delete_all_students' fonksiyonunu da içeri aktarıyoruz
 from database import init_data, save_data, archive_data, reset_daily_data, get_archive_df, delete_all_students, SUTUNLAR
 from helpers import inject_css, authenticate, kat_bul, wp, sablon_indir
 from pdf_engine import pdf_yap
@@ -23,24 +22,56 @@ def msj(i,m): st.session_state.df.at[i,"Mesaj Durumu"] = m; save_data()
 # --- KAT RENKLERİ ---
 KAT_RENKLERI = {"1. KAT": "#E3F2FD", "2. KAT": "#E8F5E9", "3. KAT": "#FFF3E0", "DİĞER": "#F3E5F5"}
 
-# --- ARAYÜZ ---
-c1, c2 = st.columns([3,1])
-with c1: st.title("📱 Mobil Takip")
+# ==========================================
+# 1. YENİ YAN MENÜ (SIDEBAR) TASARIMI
+# ==========================================
+with st.sidebar:
+    st.markdown("<h2 style='text-align: center;'>📱 Yurt Mobil</h2>", unsafe_allow_html=True)
+    st.divider()
+    menu = st.radio(
+        "MENÜ", 
+        ["📋 LİSTE", "📝 TUTANAK", "➕ EKLE", "🗑️ SİL", "🗄️ GEÇMİŞ", "📄 PDF"],
+        label_visibility="collapsed" # Üstteki Menü yazısını gizler, daha şık durur
+    )
+    st.divider()
+    st.caption("v2.0 - Firebase Altyapısı")
+
+# Ana Ekran Üst Başlık
+c1, c2 = st.columns([4,1])
+with c1: 
+    st.title(menu) # Başlık artık seçilen menüye göre değişiyor
 with c2: 
-    if st.button("🔄"): st.cache_data.clear(); st.rerun()
+    if st.button("🔄 Yenile", use_container_width=True): st.cache_data.clear(); st.rerun()
 
-menu = st.selectbox("Menü", ["📋 LİSTE", "📝 TUTANAK", "➕ EKLE", "🗑️ SİL", "🗄️ GEÇMİŞ", "📄 PDF"])
-
+# ==========================================
+# İÇERİK EKRANLARI
+# ==========================================
 if menu == "📋 LİSTE":
+    
+    f_df = st.session_state.df
+    
+    # 2. YENİ CANLI İSTATİSTİK KARTLARI (DASHBOARD)
+    if not f_df.empty:
+        toplam = len(f_df)
+        yurtta = len(f_df[f_df['Durum'] == 'Yurtta'])
+        izinli = len(f_df[f_df['Durum'].isin(['İzinli', 'Evde'])])
+        belirsiz = len(f_df[f_df['Durum'] == 'Belirsiz'])
+
+        st.markdown("##### 📊 Anlık Durum")
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Toplam", toplam)
+        k2.metric("🟢 Yurtta", yurtta)
+        k3.metric("🟡 İzinli", izinli)
+        k4.metric("⚪ Belirsiz", belirsiz)
+        st.divider()
+
+    # --- Mevcut Liste Araçları ---
     with st.expander("⚠️ YENİ GÜN BAŞLAT"):
         st.warning("Bu işlem tüm listeyi sıfırlar.")
         if st.button("🔴 SIFIRLA VE BAŞLAT", type="primary", use_container_width=True): 
             reset_daily_data()
             st.success("Sıfırlandı!"); time.sleep(1); st.rerun()
             
-    st.write("---")
-    if st.button("⬇️ VERİLERİ GÜNCELLE", type="secondary", use_container_width=True): st.cache_data.clear(); st.rerun()
-
     c_kaydet, c_arsiv = st.columns(2)
     with c_kaydet: 
         if st.button("☁️ KAYDET", type="primary"): save_data(); st.toast("Kaydedildi!")
@@ -48,12 +79,10 @@ if menu == "📋 LİSTE":
         if st.button("🌙 GÜNÜ BİTİR"): archive_data()
         
     ara = st.text_input("🔍 Ara", placeholder="Öğrenci Adı veya Oda No...")
-    f_df = st.session_state.df
     if ara: f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(ara, case=False)).any(axis=1)]
 
     f_df["_Kat_Grubu"] = f_df["Oda No"].apply(kat_bul)
     kat_sirasi = ["1. KAT", "2. KAT", "3. KAT", "DİĞER"]
-    st.info(f"Toplam: {len(f_df)} Öğrenci")
 
     for kat in kat_sirasi:
         kat_df = f_df[f_df["_Kat_Grubu"] == kat]
@@ -117,14 +146,12 @@ if menu == "📋 LİSTE":
                                     if st.button("✅ Ok", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
 
 elif menu == "📝 TUTANAK":
-    st.subheader("📝 Günlük Kat Tutanakları")
     st.session_state.tutanak_1 = st.text_area("1. Kat Tutanağı", st.session_state.tutanak_1, height=100)
     st.session_state.tutanak_2 = st.text_area("2. Kat Tutanağı", st.session_state.tutanak_2, height=100)
     st.session_state.tutanak_3 = st.text_area("3. Kat Tutanağı", st.session_state.tutanak_3, height=100)
     if st.button("💾 Tutanakları Kaydet", type="primary"): st.success("Kaydedildi")
 
 elif menu == "➕ EKLE":
-    st.subheader("Öğrenci Kayıt")
     tab1, tab2 = st.tabs(["✍️ Tek Tek Ekle", "📂 Excel Yükle"])
     with tab1:
         with st.form("ekle_manuel"):
@@ -143,15 +170,11 @@ elif menu == "➕ EKLE":
                     if c not in ndf.columns: ndf[c] = "-"
                 ndf["Durum"]="Belirsiz"; ndf["İzin Durumu"]="İzin Var"; ndf["Etüd"]="⚪"; ndf["Yat"]="⚪"; ndf["Mesaj Durumu"]="-"
                 ndf = ndf.replace("nan", "-")
-                st.dataframe(ndf.head())
                 if st.button("✅ Yükle", type="primary"):
                     st.session_state.df = pd.concat([st.session_state.df, ndf], ignore_index=True); save_data(); st.success("Yüklendi!"); time.sleep(2); st.rerun()
             except Exception as e: st.error(f"Hata: {e}")
 
 elif menu == "🗑️ SİL":
-    st.subheader("🗑️ Öğrenci Silme Ekranı")
-    
-    # --- YENİ EKLENEN TOPLU SİLME BÖLÜMÜ ---
     with st.expander("⚠️ TÜM ÖĞRENCİLERİ SİL (Dönem Sonu vs.)"):
         st.error("DİKKAT: Bu işlem listedeki BÜTÜN öğrencileri kalıcı olarak siler! Geri dönüşü yoktur.")
         sil_onay = st.checkbox("Evet, tüm öğrencileri kalıcı olarak silmek istiyorum.")
@@ -183,11 +206,9 @@ elif menu == "🗄️ GEÇMİŞ":
         st.info("Henüz arşivlenmiş kayıt bulunmamaktadır.")
 
 elif menu == "📄 PDF":
-    st.subheader("PDF Raporu")
     c1, c2, c3 = st.columns(3)
     b1 = c1.text_input("1. Kat Belletmen")
     b2 = c2.text_input("2. Kat Belletmen")
     b3 = c3.text_input("3. Kat Belletmen")
     if st.button("PDF Oluştur", type="primary"):
         st.download_button("⬇️ İndir", pdf_yap(st.session_state.df, b1, b2, b3, st.session_state.tutanak_1, st.session_state.tutanak_2, st.session_state.tutanak_3), "yoklama.pdf", "application/pdf")
-
