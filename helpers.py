@@ -1,4 +1,4 @@
-# helpers.py
+
 import streamlit as st
 import urllib.parse
 import pandas as pd
@@ -34,9 +34,11 @@ def authenticate():
         return False
     return True
 
+# GÜNCELLENEN KISIM: Excel'den gelen 101.0 gibi sayıları 101 yapar
 def kat_bul(oda_no):
     try:
-        no = int(str(oda_no).strip())
+        # Önce küsuratlı olma ihtimaline karşı float'a, sonra tam sayıya (int) çeviriyoruz
+        no = int(float(str(oda_no).strip()))
         if 101 <= no <= 115: return "1. KAT"
         elif 201 <= no <= 215: return "2. KAT"
         elif 301 <= no <= 315: return "3. KAT"
@@ -46,10 +48,4 @@ def kat_bul(oda_no):
 def wp(tel, m):
     t = str(tel).replace(' ','').lstrip('0').replace('-','').replace('.','').strip()
     if not t or len(t) < 10: return None
-    return f"https://wa.me/90{t}?text={urllib.parse.quote(m)}"
-
-def sablon_indir():
-    df_sablon = pd.DataFrame(columns=["Ad Soyad", "Numara", "Oda No", "Baba Adı", "Anne Adı", "Baba Tel", "Anne Tel"])
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer: df_sablon.to_excel(writer, index=False)
-    return output.getvalue()
+    return
