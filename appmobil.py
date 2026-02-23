@@ -1,10 +1,9 @@
-# app.py
 import streamlit as st
 import pandas as pd
 import time
 
-# Yeni Firebase fonksiyonlarımızı içeri aktarıyoruz
-from database import init_data, save_data, archive_data, reset_daily_data, get_archive_df, SUTUNLAR
+# Yeni 'delete_all_students' fonksiyonunu da içeri aktarıyoruz
+from database import init_data, save_data, archive_data, reset_daily_data, get_archive_df, delete_all_students, SUTUNLAR
 from helpers import inject_css, authenticate, kat_bul, wp, sablon_indir
 from pdf_engine import pdf_yap
 
@@ -151,6 +150,20 @@ elif menu == "➕ EKLE":
 
 elif menu == "🗑️ SİL":
     st.subheader("🗑️ Öğrenci Silme Ekranı")
+    
+    # --- YENİ EKLENEN TOPLU SİLME BÖLÜMÜ ---
+    with st.expander("⚠️ TÜM ÖĞRENCİLERİ SİL (Dönem Sonu vs.)"):
+        st.error("DİKKAT: Bu işlem listedeki BÜTÜN öğrencileri kalıcı olarak siler! Geri dönüşü yoktur.")
+        sil_onay = st.checkbox("Evet, tüm öğrencileri kalıcı olarak silmek istiyorum.")
+        if sil_onay:
+            if st.button("🚨 TÜMÜNÜ SİL", type="primary", use_container_width=True):
+                delete_all_students()
+                st.success("Tüm liste başarıyla silindi!")
+                time.sleep(1.5)
+                st.rerun()
+
+    st.write("---")
+    st.caption("Tekli Öğrenci Silme")
     ara_sil = st.text_input("Silinecek Öğrenciyi Ara (Ad veya Oda No)")
     if ara_sil:
         silinecekler = st.session_state.df[st.session_state.df.astype(str).apply(lambda x: x.str.contains(ara_sil, case=False)).any(axis=1)]
@@ -177,3 +190,4 @@ elif menu == "📄 PDF":
     b3 = c3.text_input("3. Kat Belletmen")
     if st.button("PDF Oluştur", type="primary"):
         st.download_button("⬇️ İndir", pdf_yap(st.session_state.df, b1, b2, b3, st.session_state.tutanak_1, st.session_state.tutanak_2, st.session_state.tutanak_3), "yoklama.pdf", "application/pdf")
+
