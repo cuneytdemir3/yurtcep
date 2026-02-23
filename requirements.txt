@@ -1,6 +1,8 @@
 streamlit
 pandas
+openpyxl
 gspread
 google-auth
-openpyxl
 reportlab
+requests
+firebase-admin
