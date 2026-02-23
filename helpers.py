@@ -6,13 +6,106 @@ from io import BytesIO
 def inject_css():
     st.markdown("""
     <style>
-        div[data-testid="stButton"] button { width: 100%; border-radius: 12px; border: 1px solid #ddd; padding: 15px 5px; font-size: 16px; font-weight: bold; min-height: 50px; }
-        div[data-testid="stButton"] button:hover { background-color: #f0f2f6; border-color: #333; }
-        a[kind="primary"] { width: 100%; border-radius: 12px; text-align: center; padding: 15px 5px; font-weight: bold; text-decoration: none; display: inline-block; background-color: #25D366 !important; color: white !important; border: none; margin-bottom: 5px; }
-        .streamlit-expanderHeader { font-size: 16px !important; font-weight: 700 !important; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 10px; margin-bottom: 5px; color: #333 !important; }
-        div[role="radiogroup"] { background-color: #f9f9f9; padding: 10px; border-radius: 10px; justify-content: center; }
-        .stTextArea textarea { font-size: 16px; border-radius: 10px; }
-        .kat-baslik { padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 5px solid #666; text-align: center; }
+        /* --- GENEL BUTON TASARIMI --- */
+        div[data-testid="stButton"] button { 
+            width: 100%; 
+            border-radius: 12px; 
+            border: none; 
+            padding: 10px 5px; 
+            font-size: 16px; 
+            font-weight: 600; 
+            min-height: 45px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+        }
+        div[data-testid="stButton"] button:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        /* --- WP ve DİĞER LİNK BUTONLARI --- */
+        a[kind="primary"] { 
+            width: 100%; 
+            border-radius: 12px; 
+            text-align: center; 
+            padding: 12px 5px; 
+            font-weight: bold; 
+            text-decoration: none; 
+            display: inline-block; 
+            background-color: #25D366 !important; 
+            color: white !important; 
+            border: none; 
+            margin-bottom: 5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(37,211,102,0.3);
+        }
+        a[kind="primary"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(37,211,102,0.5);
+        }
+
+        /* --- AÇILIR KUTULAR (EXPANDER) --- */
+        .streamlit-expanderHeader { 
+            font-size: 16px !important; 
+            font-weight: 600 !important; 
+            background-color: white !important; 
+            border: 1px solid #f0f2f6 !important; 
+            border-radius: 12px !important; 
+            margin-bottom: 8px; 
+            color: #31333F !important;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04) !important;
+        }
+        .streamlit-expanderHeader:hover {
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1) !important;
+            border-color: #e0e2e6 !important;
+        }
+
+        /* --- İSTATİSTİK KARTLARI (METRICS) --- */
+        div[data-testid="stMetric"] {
+            background-color: white;
+            padding: 15px 10px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            border: 1px solid #f8f9fa;
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+        div[data-testid="stMetric"]:hover {
+            transform: scale(1.02);
+        }
+        div[data-testid="stMetricValue"] {
+            font-size: 24px !important;
+        }
+
+        /* --- RADİO BUTONLARI --- */
+        div[role="radiogroup"] { 
+            background-color: #f8f9fa; 
+            padding: 10px; 
+            border-radius: 12px; 
+            justify-content: center;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.03);
+        }
+
+        /* --- KAT BAŞLIKLARI --- */
+        .kat-baslik { 
+            padding: 12px; 
+            border-radius: 12px; 
+            margin-bottom: 15px; 
+            margin-top: 10px;
+            border-left: 6px solid #555; 
+            text-align: center;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.06);
+            letter-spacing: 0.5px;
+        }
+        
+        /* --- METİN KUTULARI --- */
+        .stTextArea textarea { 
+            font-size: 16px; 
+            border-radius: 12px; 
+            border: 1px solid #ddd;
+            padding: 10px;
+        }
     </style>
     """, unsafe_allow_html=True)
 
