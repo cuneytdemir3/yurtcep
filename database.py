@@ -1,3 +1,4 @@
+# database.py
 import streamlit as st
 import pandas as pd
 import json
@@ -12,15 +13,12 @@ SUTUNLAR = ["Ad Soyad", "Numara", "Oda No", "Durum", "İzin Durumu", "Etüd", "Y
 def get_db():
     if not firebase_admin._apps:
         try:
-            # 1. İhtimal: Doğrudan yazılmışsa
             if "firebase_json" in st.secrets:
                 raw_json = st.secrets["firebase_json"]
-            # 2. İhtimal: Yanlışlıkla [firebase] başlığı altına yazılmışsa
             elif "firebase" in st.secrets and "firebase_json" in st.secrets["firebase"]:
                 raw_json = st.secrets["firebase"]["firebase_json"]
             else:
                 st.error("🚨 KRİTİK HATA: Streamlit Secrets içinde 'firebase_json' anahtarı bulunamadı!")
-                st.info("Lütfen Streamlit menüsünden 'Settings -> Secrets' kısmına girip JSON verisini doğru eklediğinizden emin olun.")
                 st.stop()
                 
             key_dict = json.loads(raw_json)
@@ -75,6 +73,11 @@ def reset_daily_data():
     st.session_state.df["Etüd"] = "⚪"
     st.session_state.df["Yat"] = "⚪"
     st.session_state.df["Mesaj Durumu"] = "-"
+    save_data()
+
+# YENİ EKLENEN: TOPLU SİLME FONKSİYONU
+def delete_all_students():
+    st.session_state.df = pd.DataFrame(columns=SUTUNLAR)
     save_data()
 
 def get_archive_df():
