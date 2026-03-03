@@ -178,7 +178,7 @@ elif menu == "➕ EKLE":
             if st.form_submit_button("Kaydet", type="primary"):
                 y = pd.DataFrame([{"Ad Soyad":ad, "Numara":no, "Oda No":oda, "Durum":"Belirsiz", "İzin Durumu":"İzin Var", "Etüd":"⚪", "Yat":"⚪", "Mesaj Durumu":"-", "Baba Adı":b_ad, "Anne Adı":a_ad, "Baba Tel":b_tel, "Anne Tel":a_tel}])
                 st.session_state.df = pd.concat([st.session_state.df, y], ignore_index=True); save_data(); st.success("Eklendi")
-    wwith tab2:
+    with tab2:
         st.info("Gerekli: Ad Soyad, Numara, Oda No, Baba Adı, Anne Adı, Baba Tel, Anne Tel")
         st.download_button("📥 Şablon", sablon_indir(), "sablon.xlsx")
         f = st.file_uploader("Excel Seç", type=["xlsx"])
@@ -245,4 +245,5 @@ elif menu == "📄 PDF":
     b3 = c3.text_input("3. Kat Belletmen")
     if st.button("PDF Oluştur", type="primary"):
         st.download_button("⬇️ İndir", pdf_yap(st.session_state.df, b1, b2, b3, st.session_state.tutanak_1, st.session_state.tutanak_2, st.session_state.tutanak_3), "yoklama.pdf", "application/pdf")
+
 
