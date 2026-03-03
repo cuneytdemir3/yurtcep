@@ -135,9 +135,19 @@ def kat_bul(oda_no):
         else: return "DİĞER"
     except: return "DİĞER"
 
+# helpers.py dosyasının içindeki wp fonksiyonunu bununla değiştir:
+
 def wp(tel, m):
-    t = str(tel).replace(' ','').lstrip('0').replace('-','').replace('.','').strip()
+    t = str(tel).strip()
+    # Excel sonuna .0 eklediyse onu temizle
+    if t.endswith('.0'): 
+        t = t[:-2]
+    # Kalan boşluk, nokta, tire ve baştaki sıfırları temizle
+    t = t.replace(' ','').replace('.','').lstrip('0').replace('-','')
+    
+    # Numara 10 haneden kısaysa hatalı kabul et ve butonu gösterme
     if not t or len(t) < 10: return None
+    
     return f"https://wa.me/90{t}?text={urllib.parse.quote(m)}"
 
 def sablon_indir():
