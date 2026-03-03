@@ -178,19 +178,34 @@ elif menu == "➕ EKLE":
             if st.form_submit_button("Kaydet", type="primary"):
                 y = pd.DataFrame([{"Ad Soyad":ad, "Numara":no, "Oda No":oda, "Durum":"Belirsiz", "İzin Durumu":"İzin Var", "Etüd":"⚪", "Yat":"⚪", "Mesaj Durumu":"-", "Baba Adı":b_ad, "Anne Adı":a_ad, "Baba Tel":b_tel, "Anne Tel":a_tel}])
                 st.session_state.df = pd.concat([st.session_state.df, y], ignore_index=True); save_data(); st.success("Eklendi")
-    with tab2:
-        st.info("Gerekli: Ad Soyad, Numara, Oda No, Baba Adı, Anne Adı, Baba Tel, Anne Tel"); st.download_button("📥 Şablon", sablon_indir(), "sablon.xlsx")
+    wwith tab2:
+        st.info("Gerekli: Ad Soyad, Numara, Oda No, Baba Adı, Anne Adı, Baba Tel, Anne Tel")
+        st.download_button("📥 Şablon", sablon_indir(), "sablon.xlsx")
         f = st.file_uploader("Excel Seç", type=["xlsx"])
         if f:
             try:
-                ndf = pd.read_excel(f).astype(str)
+                # 1. Aşama: Excel'i Oku
+                ndf = pd.read_excel(f)
+                
+                # YENİ YAMA: Sütun adlarındaki kazara oluşmuş boşlukları sil (Akıllı tanıma)
+                ndf.columns = [str(c).strip() for c in ndf.columns] 
+                ndf = ndf.astype(str)
+                
+                # 2. Aşama: Sütun Kontrolü ve Eksik Tamamlama
                 for c in SUTUNLAR: 
                     if c not in ndf.columns: ndf[c] = "-"
+                
                 ndf["Durum"]="Belirsiz"; ndf["İzin Durumu"]="İzin Var"; ndf["Etüd"]="⚪"; ndf["Yat"]="⚪"; ndf["Mesaj Durumu"]="-"
                 ndf = ndf.replace("nan", "-")
+                
                 if st.button("✅ Yükle", type="primary"):
-                    st.session_state.df = pd.concat([st.session_state.df, ndf], ignore_index=True); save_data(); st.success("Yüklendi!"); time.sleep(2); st.rerun()
-            except Exception as e: st.error(f"Hata: {e}")
+                    st.session_state.df = pd.concat([st.session_state.df, ndf], ignore_index=True)
+                    save_data()
+                    st.success("Yüklendi!")
+                    time.sleep(2)
+                    st.rerun()
+            except Exception as e: 
+                st.error(f"Hata: {e}")
 
 elif menu == "🗑️ SİL":
     with st.expander("⚠️ TÜM ÖĞRENCİLERİ SİL (Dönem Sonu vs.)"):
@@ -230,3 +245,4 @@ elif menu == "📄 PDF":
     b3 = c3.text_input("3. Kat Belletmen")
     if st.button("PDF Oluştur", type="primary"):
         st.download_button("⬇️ İndir", pdf_yap(st.session_state.df, b1, b2, b3, st.session_state.tutanak_1, st.session_state.tutanak_2, st.session_state.tutanak_3), "yoklama.pdf", "application/pdf")
+
