@@ -19,7 +19,6 @@ def izn(i): st.session_state.df.at[i,"İzin Durumu"] = "İzin Yok" if st.session
 def ey(i,t): st.session_state.df.at[i,t] = {"⚪":"✅ Var","✅ Var":"❌ Yok","❌ Yok":"⚪"}.get(st.session_state.df.at[i,t],"⚪"); save_data()
 def msj(i,m): st.session_state.df.at[i,"Mesaj Durumu"] = m; save_data()
 
-# YENİ: Toplu İşlem Algoritması
 def kalanlari_yurtta_yap():
     mask = st.session_state.df["Durum"] == "Belirsiz"
     st.session_state.df.loc[mask, "Durum"] = "Yurtta"
@@ -35,9 +34,10 @@ KAT_RENKLERI = {"1. KAT": "#E3F2FD", "2. KAT": "#E8F5E9", "3. KAT": "#FFF3E0", "
 with st.sidebar:
     st.markdown("<h2 style='text-align: center;'>📱 Yurt Mobil</h2>", unsafe_allow_html=True)
     st.divider()
-    menu = st.radio("MENÜ", ["📋 LİSTE", "📝 TUTANAK", "➕ EKLE", "🗑️ SİL", "🗄️ GEÇMİŞ", "📄 PDF"], label_visibility="collapsed")
+    # YENİ EKLENDİ: "🎫 İZİN" Menüsü
+    menu = st.radio("MENÜ", ["📋 LİSTE", "🎫 İZİN", "📝 TUTANAK", "➕ EKLE", "🗑️ SİL", "🗄️ GEÇMİŞ", "📄 PDF"], label_visibility="collapsed")
     st.divider()
-    st.caption("v2.2 - Hızlı İşlem & Dashboard")
+    st.caption("v2.3 - İzin Modülü")
 
 # Ana Ekran Üst Başlık
 c1, c2 = st.columns([4,1])
@@ -45,12 +45,12 @@ with c1: st.title(menu)
 with c2: 
     if st.button("🔄 Yenile", use_container_width=True): st.cache_data.clear(); st.rerun()
 
+f_df = st.session_state.df
+
 # ==========================================
 # İÇERİK EKRANLARI
 # ==========================================
 if menu == "📋 LİSTE":
-    
-    f_df = st.session_state.df
     
     if not f_df.empty:
         toplam = len(f_df)
@@ -58,12 +58,10 @@ if menu == "📋 LİSTE":
         izinli = len(f_df[f_df['Durum'].isin(['İzinli', 'Evde'])])
         belirsiz = len(f_df[f_df['Durum'] == 'Belirsiz'])
         
-        # 1. YENİ: DİNAMİK İLERLEME ÇUBUĞU
         islem_gorenler = toplam - belirsiz
         yuzde = int((islem_gorenler / toplam) * 100) if toplam > 0 else 0
         st.progress(yuzde / 100.0, text=f"📊 Günlük Yoklama İlerlemesi: %{yuzde} Tamamlandı")
 
-        # RENKLİ KARTLAR
         k1, k2, k3, k4 = st.columns(4)
         k1.markdown(f"""<div style="background-color: #E3F2FD; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #BBDEFB;"><p style="margin: 0; font-size: 13px; color: #1565C0; font-weight: bold;">Toplam</p><h2 style="margin: 0; color: #0D47A1; font-size: 26px;">{toplam}</h2></div>""", unsafe_allow_html=True)
         k2.markdown(f"""<div style="background-color: #E8F5E9; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #C8E6C9;"><p style="margin: 0; font-size: 13px; color: #2E7D32; font-weight: bold;">🟢 Yurtta</p><h2 style="margin: 0; color: #1B5E20; font-size: 26px;">{yurtta}</h2></div>""", unsafe_allow_html=True)
@@ -71,12 +69,10 @@ if menu == "📋 LİSTE":
         k4.markdown(f"""<div style="background-color: #F5F5F5; padding: 15px 5px; border-radius: 12px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #E0E0E0;"><p style="margin: 0; font-size: 13px; color: #616161; font-weight: bold;">⚪ Belirsiz</p><h2 style="margin: 0; color: #212121; font-size: 26px;">{belirsiz}</h2></div>""", unsafe_allow_html=True)
         st.write("")
         
-        # 3. YENİ: MİNİ GRAFİK (Data Visualization)
         grafik_verisi = pd.DataFrame({"Durum": ["Yurtta", "İzinli", "Belirsiz"], "Kişi Sayısı": [yurtta, izinli, belirsiz]}).set_index("Durum")
         st.bar_chart(grafik_verisi, height=150, color="#1565C0")
         st.divider()
 
-    # --- HIZLI İŞLEM BUTONLARI ---
     c_sifirla, c_toplu = st.columns(2)
     with c_sifirla:
         with st.expander("⚠️ YENİ GÜN BAŞLAT"):
@@ -84,7 +80,6 @@ if menu == "📋 LİSTE":
             if st.button("🔴 SIFIRLA", type="primary", use_container_width=True): 
                 reset_daily_data(); st.success("Sıfırlandı!"); time.sleep(1); st.rerun()
     with c_toplu:
-        # 2. YENİ: SİHİRLİ BUTON (Toplu İşlem)
         with st.expander("✨ HIZLI YOKLAMA"):
             st.info("Kalanları 'Yurtta' işaretler.")
             if st.button("✅ KALANLARI YURTTA SAY", type="primary", use_container_width=True):
@@ -163,6 +158,63 @@ if menu == "📋 LİSTE":
                                     if la: st.link_button("👩 Anne", la, use_container_width=True, type="primary")
                                     if st.button("✅ Ok", key=f"m{i}", use_container_width=True): msj(i, "Msj Atıldı"); st.rerun()
 
+# ==========================================
+# YENİ MODÜL: 🎫 İZİN İŞLEMLERİ
+# ==========================================
+elif menu == "🎫 İZİN":
+    
+    # 1. BÖLÜM: Yeni İzin Girişi
+    with st.expander("➕ Yeni İzin Ver", expanded=True):
+        ara_izin = st.text_input("Öğrenci Ara (Ad veya Oda No)", placeholder="İzne çıkacak öğrenciyi arayın...")
+        if ara_izin:
+            bulunanlar = f_df[f_df.astype(str).apply(lambda x: x.str.contains(ara_izin, case=False)).any(axis=1)]
+            if not bulunanlar.empty:
+                for i in bulunanlar.index:
+                    r = bulunanlar.loc[i]
+                    st.markdown(f"**👤 {r['Ad Soyad']}** (Oda: {r['Oda No']})")
+                    c1, c2 = st.columns([2, 1])
+                    izin_turu = c1.selectbox("İzin Türü", ["Evci İzni (Haftasonu/Evde)", "Çarşı İzni (Günlük)", "Raporlu/Hastane"], key=f"tur_{i}", label_visibility="collapsed")
+                    if c2.button("✅ İzne Çıkar", key=f"btn_izin_{i}", type="primary", use_container_width=True):
+                        # Evci veya Hastane ise "Evde", Çarşı ise "İzinli" işaretliyoruz
+                        if "Evci" in izin_turu or "Raporlu" in izin_turu:
+                            st.session_state.df.at[i, "Durum"] = "Evde"
+                        else:
+                            st.session_state.df.at[i, "Durum"] = "İzinli"
+                        
+                        st.session_state.df.at[i, "İzin Durumu"] = "İzin Var"
+                        st.session_state.df.at[i, "Mesaj Durumu"] = "-"
+                        save_data()
+                        st.success(f"{r['Ad Soyad']} izne çıkarıldı!")
+                        time.sleep(1)
+                        st.rerun()
+                    st.divider()
+
+    st.write("---")
+    
+    # 2. BÖLÜM: Şu An İzinde Olanlar ve Geri Dönüş
+    st.markdown("##### 🟡 Şu An İzinde Olan Öğrenciler")
+    izinliler = f_df[f_df['Durum'].isin(["İzinli", "Evde"])]
+    
+    if not izinliler.empty:
+        for i in izinliler.index:
+            r = izinliler.loc[i]
+            ikon = '🔵 Evde/Raporlu' if r['Durum'] == 'Evde' else '🟡 Çarşıda'
+            
+            with st.container():
+                c_isim, c_islem = st.columns([2, 1])
+                c_isim.write(f"{ikon} \n\n **{r['Ad Soyad']}** (Oda: {r['Oda No']})")
+                
+                # Öğrenci yurda döndüğünde tek tuşla listeye geri al
+                if c_islem.button("↩️ Yurda Döndü", key=f"dondu_{i}", use_container_width=True):
+                    st.session_state.df.at[i, "Durum"] = "Yurtta"
+                    save_data()
+                    st.toast(f"✅ {r['Ad Soyad']} yurda giriş yaptı!")
+                    time.sleep(1)
+                    st.rerun()
+                st.divider()
+    else:
+        st.info("Şu an izinde olan öğrenci bulunmuyor.")
+
 elif menu == "📝 TUTANAK":
     st.session_state.tutanak_1 = st.text_area("1. Kat Tutanağı", st.session_state.tutanak_1, height=100)
     st.session_state.tutanak_2 = st.text_area("2. Kat Tutanağı", st.session_state.tutanak_2, height=100)
@@ -179,33 +231,20 @@ elif menu == "➕ EKLE":
                 y = pd.DataFrame([{"Ad Soyad":ad, "Numara":no, "Oda No":oda, "Durum":"Belirsiz", "İzin Durumu":"İzin Var", "Etüd":"⚪", "Yat":"⚪", "Mesaj Durumu":"-", "Baba Adı":b_ad, "Anne Adı":a_ad, "Baba Tel":b_tel, "Anne Tel":a_tel}])
                 st.session_state.df = pd.concat([st.session_state.df, y], ignore_index=True); save_data(); st.success("Eklendi")
     with tab2:
-        st.info("Gerekli: Ad Soyad, Numara, Oda No, Baba Adı, Anne Adı, Baba Tel, Anne Tel")
-        st.download_button("📥 Şablon", sablon_indir(), "sablon.xlsx")
+        st.info("Gerekli: Ad Soyad, Numara, Oda No, Baba Adı, Anne Adı, Baba Tel, Anne Tel"); st.download_button("📥 Şablon", sablon_indir(), "sablon.xlsx")
         f = st.file_uploader("Excel Seç", type=["xlsx"])
         if f:
             try:
-                # 1. Aşama: Excel'i Oku
                 ndf = pd.read_excel(f)
-                
-                # YENİ YAMA: Sütun adlarındaki kazara oluşmuş boşlukları sil (Akıllı tanıma)
                 ndf.columns = [str(c).strip() for c in ndf.columns] 
                 ndf = ndf.astype(str)
-                
-                # 2. Aşama: Sütun Kontrolü ve Eksik Tamamlama
                 for c in SUTUNLAR: 
                     if c not in ndf.columns: ndf[c] = "-"
-                
                 ndf["Durum"]="Belirsiz"; ndf["İzin Durumu"]="İzin Var"; ndf["Etüd"]="⚪"; ndf["Yat"]="⚪"; ndf["Mesaj Durumu"]="-"
                 ndf = ndf.replace("nan", "-")
-                
                 if st.button("✅ Yükle", type="primary"):
-                    st.session_state.df = pd.concat([st.session_state.df, ndf], ignore_index=True)
-                    save_data()
-                    st.success("Yüklendi!")
-                    time.sleep(2)
-                    st.rerun()
-            except Exception as e: 
-                st.error(f"Hata: {e}")
+                    st.session_state.df = pd.concat([st.session_state.df, ndf], ignore_index=True); save_data(); st.success("Yüklendi!"); time.sleep(2); st.rerun()
+            except Exception as e: st.error(f"Hata: {e}")
 
 elif menu == "🗑️ SİL":
     with st.expander("⚠️ TÜM ÖĞRENCİLERİ SİL (Dönem Sonu vs.)"):
@@ -222,7 +261,7 @@ elif menu == "🗑️ SİL":
     st.caption("Tekli Öğrenci Silme")
     ara_sil = st.text_input("Silinecek Öğrenciyi Ara (Ad veya Oda No)")
     if ara_sil:
-        silinecekler = st.session_state.df[st.session_state.df.astype(str).apply(lambda x: x.str.contains(ara_sil, case=False)).any(axis=1)]
+        silinecekler = f_df[f_df.astype(str).apply(lambda x: x.str.contains(ara_sil, case=False)).any(axis=1)]
         if not silinecekler.empty:
             for i in silinecekler.index:
                 r = silinecekler.loc[i]
@@ -245,5 +284,3 @@ elif menu == "📄 PDF":
     b3 = c3.text_input("3. Kat Belletmen")
     if st.button("PDF Oluştur", type="primary"):
         st.download_button("⬇️ İndir", pdf_yap(st.session_state.df, b1, b2, b3, st.session_state.tutanak_1, st.session_state.tutanak_2, st.session_state.tutanak_3), "yoklama.pdf", "application/pdf")
-
-
